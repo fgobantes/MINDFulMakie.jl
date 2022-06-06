@@ -1,0 +1,13 @@
+name = "DrawIBNFramework"
+uuid = "23b02573-35f2-499b-a490-fd32d1f018b6"
+authors = ["fchrstou <filippos.christou@ikr.uni-stuttgart.de> and contributors"]
+version = "0.1.0"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

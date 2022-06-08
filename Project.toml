@@ -3,6 +3,19 @@ uuid = "23b02573-35f2-499b-a490-fd32d1f018b6"
 authors = ["fchrstou <filippos.christou@ikr.uni-stuttgart.de> and contributors"]
 version = "0.1.0"
 
+[deps]
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
+CompositeGraphs = "03c36417-ddab-428a-818d-5359aee292ef"
+GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
+Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
+Gtk = "4c0ca9eb-093a-5379-98c5-f87ac0bbbf44"
+IBNFramework = "437ce7a4-cd80-4539-9a29-b274cfe157d6"
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+MetaGraphs = "626554b9-1ddb-594c-aa3c-2596fe9399a5"
+MetaGraphsNext = "fa8bd995-216d-47f1-8a91-f3b68fbeb377"
+NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
+
 [compat]
 julia = "1"
 

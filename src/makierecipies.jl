@@ -4,7 +4,7 @@ isvvi(j) = false
 isvve(j) = false
 
 struct DummyPlotIBN{R,T}
-    cgr::CompositeGraph{R,T}
+    cgr::NestedGraph{R,T}
 end
 
 function coordlayout(gr::AbstractGraph, xcoord::Symbol=:xcoord, ycoord::Symbol=:ycoord)
@@ -24,12 +24,13 @@ end
         color_paths_obs = nothing,
         color_paths = nothing,
         color_edges = nothing,
+        pure_colors = nothing,
         circle_nodes = nothing,
         intentidx = nothing
     )
 end
 
-function nodelabel(cgr::CompositeGraph, v::Integer, show_router=false, subnetwork_view=false) 
+function nodelabel(cgr::NestedGraph, v::Integer, show_router=false, subnetwork_view=false) 
     nodelabs = subnetwork_view ? string(cgr.vmap[v]) : string(v)
     noderouter = string()
     if show_router
@@ -42,7 +43,7 @@ function nodelabel(cgr::CompositeGraph, v::Integer, show_router=false, subnetwor
     isempty(noderouter) ? nodelabs : nodelabs * "," * noderouter
 end
 
-function edgelabel(cgr::CompositeGraph, e::Edge, show_links=false)
+function edgelabel(cgr::NestedGraph, e::Edge, show_links=false)
     edgelabs = show_links ? string(get_prop(cgr, e, :link).rezcapacity,"/",get_prop(cgr, e, :link).capacity) : string()
 end
 
@@ -66,10 +67,10 @@ function Makie.plot!(ibnp::IBNPlot)
         end
         return :black
     end
-    CompositeGraphs.cgraphplot!(ibnp, ibnp[:ibn][].cgr; 
+    NestedGraphMakie.ngraphplot!(ibnp, ibnp[:ibn][].cgr; 
                                 merge((nlabels=nodelabels, elabels=edgelabels, edge_color=edgecolors, layout=coordlayout),
-                                      NamedTuple(Makie.attributes_from(CompositeGraphs.CGraphPlot, ibnp)), 
-                                      NamedTuple(Makie.attributes_from(GraphMakie.GraphPlot, ibnp)))...)
+                                      NamedTuple(ibnp.attributes), 
+                                      NamedTuple(ibnp.attributes))...)
 
     #TODO with observable
     gmp = ibnp.plots[1].plots[1]
@@ -97,8 +98,8 @@ function Makie.plot!(ibnp::IBNPlot)
             push!(scatternodes, cinods)
         end
     end
-    if ibnp.intentidx[] != nothing
-        glbns, _ = logicalorderedintents(ibn[], ibn[].intents[ibnp.intentidx[]], ibn[].intents[ibnp.intentidx[]] |> getroot)
+    if ibnp.intentidx[] !== nothing
+        glbns, _ = logicalorderedintents(ibn[], ibn[].intents[ibnp.intentidx[]], ibn[].intents[ibnp.intentidx[]] |> getroot, true)
         llis = [glbn.lli for glbn in glbns if glbn.ibn.id == ibn[].id]
 
         noderouterintents = filter(x -> x isa NodeRouterIntent, llis)
@@ -114,7 +115,11 @@ function Makie.plot!(ibnp::IBNPlot)
 
     for (i,colorpath) in enumerate(colorpaths)
         distcolors = Colors.distinguishable_colors(length(colorpaths) + 3, [Colors.RGB(1,1,1), Colors.RGB(0,0,0)])[3:end]
-        GraphMakie.edgeplot!(ibnp, colorpath, linewidth=lwd[]*5 ,color=(distcolors[i],0.3))
+        if ibnp.pure_colors[] !== nothing
+            GraphMakie.edgeplot!(ibnp, colorpath, linewidth=lwd[]*5 ,color=ibnp.pure_colors[][i])
+        else
+            GraphMakie.edgeplot!(ibnp, colorpath, linewidth=lwd[]*5 ,color=(distcolors[i],0.3))
+        end
     end
     startcircleradius = gmp.node_size[] * 2
     for (i,scattnod) in enumerate(scatternodes)
@@ -137,7 +142,7 @@ function Makie.plot!(ibnp::IBNPlot{<:Tuple{Vector{IBN{R}}}}) where {R}
 
     if ibnp.intentidx[] != nothing
         glbns, _ = IBNFramework.logicalorderedintents(ibnp[1][][1], ibnp[1][][1].intents[numintent]
-                                                     , getroot(ibnp[1][][1].intents[numintent])) 
+                                                     , getroot(ibnp[1][][1].intents[numintent]), true) 
     end
 
     for (i,ibn) in enumerate(ibnp[1][])
@@ -208,9 +213,9 @@ struct ExtendedIntentTree{T<:Intent}
 end
 AbstractTrees.printnode(io::IO, node::ExtendedIntentTree) = print(io, "IBN:$(getid(node.ibn)), IntentIdx:$(node.idx)\n$(normaltext(node.intent))")
 AbstractTrees.children(node::ExtendedIntentTree) = node.children
-AbstractTrees.has_children(node::ExtendedIntentTree) = length(node.children) > 0
 AbstractTrees.parent(node::ExtendedIntentTree) = node.parent
 AbstractTrees.isroot(node::ExtendedIntentTree) = parent(node) === nothing
+has_children(node::ExtendedIntentTree) = length(node.children) > 0
 
 function ExtendedIntentTree(ibn::IBN, intentidx::Int)
     intentr = ibn.intents[intentidx]

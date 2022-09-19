@@ -5,6 +5,9 @@ isvvi(j) = false
 isvve(x::Vector{Vector{T}}) where T<:Graphs.SimpleGraphs.AbstractSimpleEdge = length(x) > 0
 isvve(j) = false
 
+"Get type by stripping outer vector"
+deduceOuterVector(x::Vector{T}) where T = T
+
 """
 $(TYPEDSIGNATURES)
 Return a network layout for coordinates if each node in `gr` has coordinate data `xcoord` and `ycoord`.
@@ -32,12 +35,12 @@ end
     )
 end
 
-function nodelabel(cgr::NestedGraph, v::Integer, show_router=false, subnetwork_view=false) 
-    nodelabs = subnetwork_view ? string(cgr.vmap[v]) : string(v)
+function nodelabel(ngr::NestedGraph, v::Integer, show_router=false, subnetwork_view=false) 
+    nodelabs = subnetwork_view ? string(ngr.vmap[v]) : string(v)
     noderouter = string()
     if show_router
-        if has_prop(cgr, v, :router)
-            noderouter = string(sum(get_prop(cgr, v, :router).portavailability), "/",length(get_prop(cgr, v, :router).portavailability))
+        if has_prop(ngr, v, :router)
+            noderouter = string(sum(get_prop(ngr, v, :router).portavailability), "/",length(get_prop(ngr, v, :router).portavailability))
         else
             noderouter = "?"
         end
@@ -45,9 +48,9 @@ function nodelabel(cgr::NestedGraph, v::Integer, show_router=false, subnetwork_v
     isempty(noderouter) ? nodelabs : nodelabs * "," * noderouter
 end
 
-function edgelabel(cgr::NestedGraph, e::Edge, show_links=false)
+function edgelabel(ngr::NestedGraph, e::Edge, show_links=false)
     edgelabs = show_links ? let
-        fv = get_prop(cgr, e, :link)
+        fv = get_prop(ngr, e, :link)
         @assert fv.spectrum_src == fv.spectrum_dst
         availslots = fv.spectrum_src
         string(sum(availslots),"/",length(availslots))
@@ -56,12 +59,10 @@ end
 
 function Makie.plot!(ibnp::IBNPlot)
     ibn = ibnp[:ibn]
-    nodelabels = @lift [nodelabel(ibn[].cgr, v, $(ibnp.show_routers), $(ibnp.subnetwork_view)) for v in vertices(ibn[].cgr)]
-    edgelabels = @lift [edgelabel(ibn[].cgr, e, $(ibnp.show_links)) for e in edges(ibn[].cgr)]
+    nodelabels = @lift [nodelabel(ibn[].ngr, v, $(ibnp.show_routers), $(ibnp.subnetwork_view)) for v in vertices(ibn[].ngr)]
+    edgelabels = @lift [edgelabel(ibn[].ngr, e, $(ibnp.show_links)) for e in edges(ibn[].ngr)]
         
-    NestedGraphMakie.ngraphplot!(ibnp, ibnp[:ibn][].cgr; 
-                                merge((nlabels=nodelabels, elabels=edgelabels, layout=coordlayout),
-                                      NamedTuple(ibnp.attributes))...)
+    NestedGraphMakie.ngraphplot!(ibnp, ibnp[:ibn][].ngr; ibnp.attributes..., nlabels=nodelabels, elabels=edgelabels, layout=coordlayout)
 
 
     # first plots[1] is NestedGraphMakie and second plots[1] is GraphMakie
@@ -73,10 +74,10 @@ function Makie.plot!(ibnp::IBNPlot)
         scnds = Vector{Vector{Int}}()
 
         if $(ibnp.color_paths) !== nothing
-            push!(clps, fillcolorpaths($(ibnp.color_paths), ibn[].cgr, $(edps))...)
+            push!(clps, fillcolorpaths($(ibnp.color_paths), ibn[].ngr, $(edps))...)
         end
         if $(ibnp.color_edges) !== nothing
-            push!(clps, fillcolorpaths($(ibnp.color_edges), ibn[].cgr, $(edps))...)
+            push!(clps, fillcolorpaths($(ibnp.color_edges), ibn[].ngr, $(edps))...)
         end
         if $(ibnp.intentidx) !== nothing
             cps,snds = fillcolorpaths($(ibnp.intentidx), ibn[], $(edps))
@@ -92,7 +93,7 @@ function Makie.plot!(ibnp::IBNPlot)
     scatternodes = @lift $(colorp_scattern)[2]
 
     ibnp[:flat_paths] = @lift begin
-        reduce(vcat, $(colorpaths))
+        reduce(vcat, $(colorpaths); init=deduceOuterVector($(colorpaths))())
     end
     flat_paths = ibnp[:flat_paths]
 
@@ -103,29 +104,29 @@ function Makie.plot!(ibnp::IBNPlot)
         else
             vvcol = [fill(pc, length(cp)) for (pc,cp) in zip($(ibnp.pure_colors),($colorpaths))]
         end
-        reduce(vcat, vvcol)
+        temp = reduce(vcat, vvcol; init=deduceOuterVector(vvcol)())
     end
     flat_colors = ibnp[:flat_colors]
     
     lwd2 = @lift $(gmp.edge_width)*5
 
-    GraphMakie.edgeplot!(ibnp, flat_paths; color=flat_colors, linewidth=lwd2)
-
+    if length(flat_paths[]) > 0
+        GraphMakie.edgeplot!(ibnp, flat_paths; color=flat_colors, linewidth=lwd2)
+    end
 
     ibnp[:flat_scatternodes] = @lift begin
-        flat_nodes = reduce(vcat, $(scatternodes))
+        flat_nodes = reduce(vcat, $(scatternodes); init=deduceOuterVector($(scatternodes))())
         $(gmp.node_pos)[flat_nodes]
     end
     flat_scatternodes = ibnp[:flat_scatternodes]
     
     flat_markersize = @lift begin
         circleradius = Vector{Int}()
-        startcircleradius = $(gmp.node_size) * 2
+        startcircleradius = maximum(values($(gmp.node_size))) * 2
         for sn in $(scatternodes)
             push!(circleradius, fill(startcircleradius, length(sn))...)
             startcircleradius += 8
         end
-        @show circleradius
         return circleradius
     end
     
@@ -137,7 +138,7 @@ function Makie.plot!(ibnp::IBNPlot)
         else
             vvcol = [fill(pc, length(sn)) for (pc,sn) in zip($(ibnp.pure_colors),($scatternodes))]
         end
-        reduce(vcat, vvcol)
+        reduce(vcat, vvcol; init=deduceOuterVector(vvcol)())
     end
     
     scatter!(ibnp, flat_scatternodes, markersize=flat_markersize, 
@@ -173,10 +174,15 @@ function Makie.plot!(ibnp::IBNPlot{<:Tuple{Vector{IBN{R}}}}) where {R}
                      color_edges=[edgs],
                      circle_nodes = [localnoderouterintents],
                      node_color=distcolors[i], 
-                     node_invis=transnodes(ibn, subnetwork_view=false), 
+                     nlabels_textsize=Dict(v => 0 for v in transnodes(ibn, subnetwork_view=false)),
+                     node_size=Dict(v => 0 for v in transnodes(ibn, subnetwork_view=false)),
+                    #  node_invis=transnodes(ibn, subnetwork_view=false), 
                      intentidx=nothing)
         else
-            ibnplot!(ibnp, ibn; ibnp.attributes..., node_color=distcolors[i], node_invis=transnodes(ibn, subnetwork_view=false))
+            ibnplot!(ibnp, ibn; ibnp.attributes..., node_color=distcolors[i], 
+                     nlabels_textsize=Dict(v => 0 for v in transnodes(ibn, subnetwork_view=false)),
+                     node_size=Dict(v => 0 for v in transnodes(ibn, subnetwork_view=false)))
+                # node_invis=transnodes(ibn, subnetwork_view=false))
         end
     end
     return ibnp
@@ -203,7 +209,7 @@ function fillcolorpaths(intentidxs::Vector{T}, ibn::IBN, edps) where T<:Integer
             [localedge(ibn, cedg; subnetwork_view=false) for cedg in nedgs]
         end for intentidx in intentidxs
     ]
-    colorpaths = fillcolorpaths(nedges, ibn.cgr, edps)
+    colorpaths = fillcolorpaths(nedges, ibn.ngr, edps)
     return colorpaths, scatternodes
 end
 

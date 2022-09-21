@@ -68,6 +68,8 @@ function Makie.plot!(ibnp::IBNPlot)
     # first plots[1] is NestedGraphMakie and second plots[1] is GraphMakie
     gmp = ibnp.plots[1].plots[1]
     edps = gmp.edge_paths
+    # scatter plot
+    scp = ibnp.plots[1].plots[1].plots[2]
     
     colorp_scattern = @lift begin
         clps = Vector{Vector{GraphMakie.AbstractPath{Point{2, Float32}}}}()
@@ -79,7 +81,7 @@ function Makie.plot!(ibnp::IBNPlot)
         if $(ibnp.color_edges) !== nothing
             push!(clps, fillcolorpaths($(ibnp.color_edges), ibn[].ngr, $(edps))...)
         end
-        if $(ibnp.intentidx) !== nothing
+        if $(ibnp.intentidx) !== nothing && length($(ibnp.intentidx)) > 0
             cps,snds = fillcolorpaths($(ibnp.intentidx), ibn[], $(edps))
             push!(clps, cps...)
             push!(scnds, snds...)
@@ -122,7 +124,7 @@ function Makie.plot!(ibnp::IBNPlot)
     
     flat_markersize = @lift begin
         circleradius = Vector{Int}()
-        startcircleradius = maximum(values($(gmp.node_size))) * 2
+        startcircleradius = maximum(values($(scp.markersize))) * 2
         for sn in $(scatternodes)
             push!(circleradius, fill(startcircleradius, length(sn))...)
             startcircleradius += 8
@@ -149,41 +151,32 @@ end
 
 function Makie.plot!(ibnp::IBNPlot{<:Tuple{Vector{IBN{R}}}}) where {R}
     distcolors = distinguishable_colors(length(ibnp[1][]))
+    typetupl = (first(distcolors), 0.5) |> typeof
+    firstibn = ibnp[1][][1]
 
-    numintent = ibnp.intentidx[]
-
-    if ibnp.intentidx[] != nothing
-        glbns, _ = IBNFramework.logicalorderedintents(ibnp[1][][1], ibnp[1][][1].intents[numintent]
-                                                     , getroot(ibnp[1][][1].intents[numintent]), true) 
+    # should be a vector of indices
+    if ibnp.intentidx[] === nothing
+        numintent = Int[]
+    else
+        numintent = ibnp.intentidx[]
     end
 
-    for (i,ibn) in enumerate(ibnp[1][])
-        if ibnp.intentidx[] !== nothing
-            ibnglbn = [glbn for glbn in glbns if glbn.ibn.id == ibn.id]
+    intcols = distinguishable_colors(length(numintent) + 3, [RGB(1,1,1), RGB(0,0,0)])[3:end]
+    remintentidxs = [getremoteintentsid(firstibn, numint) for numint in numintent]
+    [push!(rii, (1, numint)) for (rii, numint) in zip(remintentidxs, numintent)]
 
-            llis = getfield.(ibnglbn, :lli)
-            noderouterintents = filter(x -> x isa NodeRouterIntent, llis)
-            noderouternodes = getfield.(noderouterintents, :node)
-            localnoderouterintents = [localnode(ibn, nri; subnetwork_view=false) for nri in noderouternodes]
-            #localnoderouterintents
-            nodespectrumintents = filter(x -> x isa NodeSpectrumIntent, llis)
-            cedges = getfield.(nodespectrumintents, :edge)
-            edgs = [localedge(ibn, cedg; subnetwork_view=false) for cedg in cedges]
-            unique!(edgs)
-            ibnplot!(ibnp, ibn; ibnp.attributes..., 
-                     color_edges=[edgs],
-                     circle_nodes = [localnoderouterintents],
-                     node_color=distcolors[i], 
-                     nlabels_textsize=Dict(v => 0 for v in transnodes(ibn, subnetwork_view=false)),
-                     node_size=Dict(v => 0 for v in transnodes(ibn, subnetwork_view=false)),
-                    #  node_invis=transnodes(ibn, subnetwork_view=false), 
-                     intentidx=nothing)
-        else
-            ibnplot!(ibnp, ibn; ibnp.attributes..., node_color=distcolors[i], 
-                     nlabels_textsize=Dict(v => 0 for v in transnodes(ibn, subnetwork_view=false)),
-                     node_size=Dict(v => 0 for v in transnodes(ibn, subnetwork_view=false)))
-                # node_invis=transnodes(ibn, subnetwork_view=false))
-        end
+    for (i,ibn) in enumerate(ibnp[1][])
+        intentidxs = [getindex.(filter(x -> x[1] == i, rii), 2) for rii in remintentidxs]
+        purecols = reduce(vcat, [fill((col, 0.5), length(inidxs)) for (col,inidxs) in zip(intcols, intentidxs)], 
+            init=Vector{typetupl}())
+        flatints = reduce(vcat, intentidxs, init=Int[])
+
+        ibnplot!(ibnp, ibn; ibnp.attributes..., 
+                 node_color=distcolors[i], 
+                 nlabels_textsize=Dict(v => 0 for v in transnodes(ibn, subnetwork_view=false)),
+                 node_size=Dict(v => 0 for v in transnodes(ibn, subnetwork_view=false)),
+                 intentidx=flatints,
+                 pure_colors=purecols)
     end
     return ibnp
 end
@@ -192,7 +185,7 @@ function fillcolorpaths(paths::Vector{Vector{T}}, ngr, edps) where T<:Integer
     fillcolorpaths(edgeify.(paths), ngr, edps)
 end
 
-function fillcolorpaths(nedges::Vector{Vector{E}}, ngr, edps) where E<:AbstractEdge
+function fillcolorpaths(nedges::Vector{E}, ngr, edps) where E#where E#<:AbstractEdge
     [let
         idxs = find_edge_index.([ngr], nedgs)
         edps[broadcast(in, 1:end, [idxs])]
@@ -214,7 +207,7 @@ function fillcolorpaths(intentidxs::Vector{T}, ibn::IBN, edps) where T<:Integer
 end
 
 function getlogicspecturmintents!(scatternodes, ibn::IBN, intentidx::T) where T<:Integer
-    glbns, _ = logicalorderedintents(ibn, ibn.intents[intentidx], ibn.intents[intentidx] |> getroot, true)
+    glbns, _ = logicalorderedintents(ibn, getintent(ibn, intentidx), getintent(ibn, intentidx) |> getroot, true)
     llis = [glbn.lli for glbn in glbns if glbn.ibn.id == ibn.id]
     noderouterintents = filter(x -> x isa NodeRouterIntent, llis)
     noderouternodes = getfield.(noderouterintents, :node)

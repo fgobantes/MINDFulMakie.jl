@@ -1,0 +1,6 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+MINDFul = "437ce7a4-cd80-4539-9a29-b274cfe157d6"
+MINDFulMakie = "23b02573-35f2-499b-a490-fd32d1f018b6"
+NestedGraphMakie = "6f6f4c20-e954-4c6d-a185-c2fbf890196e"
+NestedGraphs = "03c36417-ddab-428a-818d-5359aee292ef"

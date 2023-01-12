@@ -1,6 +1,6 @@
-using DrawIBNFramework
+using MINDFulMakie
 using Test
 
-@testset "DrawIBNFramework.jl" begin
+@testset "MINDFulMakie.jl" begin
     # Write your tests here.
 end

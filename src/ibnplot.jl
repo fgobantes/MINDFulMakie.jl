@@ -221,7 +221,7 @@ find_edge_index(gr::AbstractGraph, e::Edge) = findfirst(==(e), collect(edges(gr)
 """
 Create legend with (e.g.)
 ```
-Legend(f[1,1], IBNFramework.getlegendplots(p), ["Intent5","Intent3"], tellheight=false, tellwidth=false, halign=:right)
+Legend(f[1,1], MINDFul.getlegendplots(p), ["Intent5","Intent3"], tellheight=false, tellwidth=false, halign=:right)
 ```
 """
 getlegendplots(ibnp::IBNPlot) = return ibnp.plots[2:end]

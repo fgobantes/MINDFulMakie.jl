@@ -2,7 +2,7 @@
 
 julia_version = "1.8.4"
 manifest_format = "2.0"
-project_hash = "99af7208e3abecc3d273336e34fb35389c4f0476"
+project_hash = "9eb41792b19eea8850f8907d4ab485a80bfb6a33"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -751,8 +751,6 @@ version = "0.1.0"
 [[deps.NestedGraphs]]
 deps = ["AbstractTrees", "DocStringExtensions", "Graphs", "MetaGraphs"]
 git-tree-sha1 = "05039157c52ff19d517e2c21d1f9af033b453963"
-repo-rev = "main"
-repo-url = "https://github.com/UniStuttgart-IKR/NestedGraphs.jl"
 uuid = "03c36417-ddab-428a-818d-5359aee292ef"
 version = "0.1.0"
 

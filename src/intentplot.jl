@@ -1,4 +1,13 @@
-"Plots the `idx`st intent of `ibn`"
+"""
+    intentplot(ibn::IBN, idx::Integer)
+    intentplot!(ax, ibn::IBN, idx::Integer)
+
+Creates a tree plot of the intent Directed Acyclic Graph (DAG) `idx`.
+
+## Attributes
+- `interdomain=false`: reach out to all domains (might malfunction)
+- `show_state=true`: shows the state of each intent DAG node
+"""
 @recipe(IntentPlot, ibn, idx) do scene
     Attributes(
                interdomain = false,
@@ -21,3 +30,4 @@ function Makie.plot!(intplot::IntentPlot)
 
     return intplot
 end
+

@@ -8,7 +8,7 @@ import AbstractTrees
 import MetaGraphsNext as MGN
 import MetaGraphsNext: MetaGraph as MG
 import MetaGraphsNext: MetaDiGraph as MDG
-import MINDFul: getleafs, LowLevelIntent, NodeRouterIntent, NodeSpectrumIntent, dividefamily, dagtext, logicalorderedintents, getroot, localedge, localnode, getid
+import MINDFul: getleafs, LowLevelIntent, NodeRouterIntent, NodeSpectrumIntent, dividefamily, dagtext, logicalorderedintents, getuserintent, localedge, localnode, getid
 
 export ibnplot, ibnplot!, intentplot, intentplot!
 #export showgtk, showgtk!

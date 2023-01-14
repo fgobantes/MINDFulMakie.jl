@@ -173,8 +173,8 @@ function Makie.plot!(ibnp::IBNPlot{<:Tuple{Vector{IBN{R}}}}) where {R}
 
         ibnplot!(ibnp, ibn; ibnp.attributes..., 
                  node_color=distcolors[i], 
-                 nlabels_textsize=Dict(v => 0 for v in transnodes(ibn, subnetwork_view=false)),
-                 node_size=Dict(v => 0 for v in transnodes(ibn, subnetwork_view=false)),
+                 nlabels_textsize=Dict(v => 0 for v in bordernodes(ibn, subnetwork_view=false)),
+                 node_size=Dict(v => 0 for v in bordernodes(ibn, subnetwork_view=false)),
                  intentidx=flatints,
                  pure_colors=purecols)
     end
@@ -207,7 +207,7 @@ function fillcolorpaths(intentidxs::Vector{T}, ibn::IBN, edps) where T<:Integer
 end
 
 function getlogicspecturmintents!(scatternodes, ibn::IBN, intentidx::T) where T<:Integer
-    glbns, _ = logicalorderedintents(ibn, getintent(ibn, intentidx), getintent(ibn, intentidx) |> getroot, true)
+    glbns, _ = logicalorderedintents(ibn, getintent(ibn, intentidx), getintent(ibn, intentidx) |> getuserintent, true)
     llis = [glbn.lli for glbn in glbns if glbn.ibn.id == ibn.id]
     noderouterintents = filter(x -> x isa NodeRouterIntent, llis)
     noderouternodes = getfield.(noderouterintents, :node)

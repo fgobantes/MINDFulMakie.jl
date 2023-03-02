@@ -2,18 +2,19 @@ module MINDFulMakie
 
 using MINDFul, Graphs, MetaGraphs, NestedGraphs, NestedGraphMakie
 using Makie, GraphMakie, NetworkLayout, Colors
+using LayeredLayouts
 using DocStringExtensions
+using UUIDs
 
 import AbstractTrees
 import MetaGraphsNext as MGN
-import MetaGraphsNext: MetaGraph as MG
-import MetaGraphsNext: MetaDiGraph as MDG
-import MINDFul: getleafs, LowLevelIntent, NodeRouterIntent, NodeSpectrumIntent, dividefamily, dagtext, logicalorderedintents, getuserintent, localedge, localnode, getid
+import MINDFul: getleafs, LowLevelIntent, NodeSpectrumIntent, dividefamily, dagtext, logicalorderedintents, localedge, localnode, getid
 
-export ibnplot, ibnplot!, intentplot, intentplot!
+export ibnplot, ibnplot!, intentplot, intentplot!, netgraphplot, netgraphplot!
 #export showgtk, showgtk!
 
 include("extendedintenttree.jl")
+include("netgraphplot.jl")
 include("ibnplot.jl")
 include("intentplot.jl")
 

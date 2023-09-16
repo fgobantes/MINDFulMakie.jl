@@ -1,7 +1,7 @@
 name = "MINDFulMakie"
 uuid = "23b02573-35f2-499b-a490-fd32d1f018b6"
 authors = ["fchrstou <filippos.christou@ikr.uni-stuttgart.de> and contributors"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"

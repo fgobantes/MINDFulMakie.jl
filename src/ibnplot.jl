@@ -48,8 +48,8 @@ function Makie.plot!(ibnp::IBNPlot)
     colorpaths = @lift $(colorp_scattern)[1]
     scatternodes = @lift $(colorp_scattern)[2]
 
-    netgraphplot!(ibnp, ibnp[:ibn][].ngr; ibnp.attributes..., nlabels=nodelabels, elabels=edgelabels, layout=coordlayout, 
-                                color_paths=colorpaths, circle_nodes=scatternodes)
+    netgraphplot!(ibnp, ibnp[:ibn][].ngr; nlabels=nodelabels, elabels=edgelabels, layout=coordlayout, 
+                                color_paths=colorpaths, circle_nodes=scatternodes, ibnp.attributes...)
 
     return ibnp
 end

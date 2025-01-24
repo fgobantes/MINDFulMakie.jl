@@ -3,18 +3,19 @@ $(TYPEDSIGNATURES)
 Return a network layout for coordinates if each node in `gr` has coordinate data `xcoord` and `ycoord`.
 If no return a `NetworkLayout.spring` layout
 """
-function coordlayout(gr::AbstractGraph, xcoord::Symbol=:xcoord, ycoord::Symbol=:ycoord)
+function coordlayout(gr::AttributeGraph)
     try 
-        xs = [[get_prop(gr, v, xcoord), get_prop(gr,v, ycoord)] for v in vertices(gr)]
-        return [Point(x...) for x in xs ]
+        xs = MINDF.getcoords.(vertex_attr(gr))
+        # xs = [[get_prop(gr, v, xcoord), get_prop(gr,v, ycoord)] for v in vertices(gr)]
+        return [Point(x...) for x in xs]
     catch e
         return NetworkLayout.spring(gr)
     end
 end
 
 """
-    intentplot(ibn::IBN)
-    intentplot!(ax, ibn::IBN)
+    intentplot(ibn::IBNF)
+    intentplot!(ax, ibn::IBNF)
 
 Creates a graph plot of the `ibn`.
 
@@ -24,7 +25,7 @@ Creates a graph plot of the `ibn`.
 - `subnetwork_view = false`: show node labels with the controller view indexing.
 - `intentidx = nothing`: highligh the passed in intent.
 """
-@recipe(IBNPlot, ibn) do scene
+@recipe(IBNFPlot, ibn) do scene
     Attributes(
         show_routers = false,
         show_links = false,
@@ -33,10 +34,9 @@ Creates a graph plot of the `ibn`.
     )
 end
 
-function Makie.plot!(ibnp::IBNPlot)
+function Makie.plot!(ibnp::IBNFPlot)
     ibn = ibnp[:ibn]
-    nodelabels = @lift [nodelabel(ibn[].ngr, v, $(ibnp.show_routers), $(ibnp.subnetwork_view)) for v in vertices(ibn[].ngr)]
-    edgelabels = @lift [edgelabel(ibn[].ngr, e, $(ibnp.show_links)) for e in edges(ibn[].ngr)]
+    # nodelabels = @lift [nodelabel(ibn[].ngr, v, $(ibnp.show_routers), $(ibnp.subnetwork_view)) for v in vertices(ibn[].ngr)]
         
     colorp_scattern = @lift begin
         if $(ibnp.intentidx) !== nothing && length($(ibnp.intentidx)) > 0
@@ -48,13 +48,13 @@ function Makie.plot!(ibnp::IBNPlot)
     colorpaths = @lift $(colorp_scattern)[1]
     scatternodes = @lift $(colorp_scattern)[2]
 
-    netgraphplot!(ibnp, ibnp[:ibn][].ngr; nlabels=nodelabels, elabels=edgelabels, layout=coordlayout, 
+    GraphMakie.graphplot!(ibnp, MINDF.getgraph(ibnp[:ibn][]); layout=coordlayout, 
                                 color_paths=colorpaths, circle_nodes=scatternodes, ibnp.attributes...)
 
     return ibnp
 end
 
-function Makie.plot!(ibnp::IBNPlot{<:Tuple{Vector{IBN{R}}}}) where {R}
+function Makie.plot!(ibnp::IBNFPlot{<:Tuple{Vector{<:IBNF}}})
     distcolors = distinguishable_colors(length(ibnp[1][]))
     typetupl = (first(distcolors), 0.5) |> typeof
     firstibn = ibnp[1][][1]
@@ -82,40 +82,18 @@ function Makie.plot!(ibnp::IBNPlot{<:Tuple{Vector{IBN{R}}}}) where {R}
             flatints = reduce(vcat, intentidxs, init=UUID[])
         end
 
-        ibnplot!(ibnp, ibn; ibnp.attributes..., 
+        ibnfplot!(ibnp, ibn; ibnp.attributes..., 
                  node_color=distcolors[i], 
-                 nlabels_fontsize=Dict(v => 0 for v in bordernodes(ibn, subnetwork_view=false)),
-                 node_size=Dict(v => 0 for v in bordernodes(ibn, subnetwork_view=false)),
-                 intentidx=flatints,
-                 pure_colors=purecols)
+                 nlabels_fontsize=Dict(v => 0 for v in getlocalview.(getbordernodes(ibn))),
+                                       node_size=Dict(v => 0 for v in getlocalview.(getbordernodes(ibn))),
+                                       intentidx=flatints,
+                                       pure_colors=purecols)
     end
     return ibnp
 end
 
 
-function nodelabel(ngr::NestedGraph, v::Integer, show_router=false, subnetwork_view=false) 
-    nodelabs = subnetwork_view ? string(ngr.vmap[v]) : string(v)
-    noderouter = string()
-    if show_router
-        if has_prop(ngr, v, :router)
-            noderouter = string(sum(get_prop(ngr, v, :router).portavailability), "/",length(get_prop(ngr, v, :router).portavailability))
-        else
-            noderouter = "?"
-        end
-    end
-    isempty(noderouter) ? nodelabs : nodelabs * "," * noderouter
-end
-
-function edgelabel(ngr::NestedGraph, e::Edge, show_links=false)
-    edgelabs = show_links ? let
-        fv = get_prop(ngr, e, :link)
-        @assert fv.spectrum_src == fv.spectrum_dst
-        availslots = fv.spectrum_src
-        string(sum(availslots),"/",length(availslots))
-    end : string()
-end
-
-function fillcolorpaths(intentidxs::Vector{UUID}, ibn::IBN)
+function fillcolorpaths(intentidxs::Vector{UUID}, ibn::IBNF)
     scatternodes = Vector{Vector{Int}}()
     nedges = [
         let 
@@ -128,7 +106,7 @@ function fillcolorpaths(intentidxs::Vector{UUID}, ibn::IBN)
     return nedges, scatternodes
 end
 
-function getlogicspecturmintents!(scatternodes, ibn::IBN, intentidx::UUID)
+function getlogicspecturmintents!(scatternodes, ibn::IBNF, intentidx::UUID)
     glbns, _ = logicalorderedintents(ibn, getintentnode(ibn, intentidx), true)
     llis = [glbn.lli for glbn in glbns if glbn.ibn.id == ibn.id]
     noderouterintents = filter(x -> x isa MINDFul.NodeRouterPortIntent, llis)

@@ -32,7 +32,7 @@ end
 function Makie.plot!(nngp::NetGraphPlot)
         ng = nngp[:ng]
             
-        NestedGraphMakie.ngraphplot!(nngp, nngp[:ng][]; nngp.attributes...)
+        GraphMakie.graphplot!(nngp, nngp[:ng][]; nngp.attributes...)
 
         # first plots[1] is NestedGraphMakie and second plots[1] is GraphMakie
         gmp = nngp.plots[1].plots[1]

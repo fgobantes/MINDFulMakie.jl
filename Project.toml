@@ -15,19 +15,21 @@ MINDFul = "437ce7a4-cd80-4539-9a29-b274cfe157d6"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 MetaGraphsNext = "fa8bd995-216d-47f1-8a91-f3b68fbeb377"
 NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [compat]
 AbstractTrees = "0.4.4"
-Colors = "0.12"
+Colors = "0.13"
 DocStringExtensions = "0.9.3"
 GraphMakie = "0.5.5"
 Graphs = "1.8"
 LayeredLayouts = "0.2.9"
 MINDFul = "0.3.0"
-Makie = "0.20"
+Makie = "0.22"
 MetaGraphsNext = "0.7"
 NetworkLayout = "0.4.5"
+Printf = "1.11.0"
 julia = "1"
 
 [extras]

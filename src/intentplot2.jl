@@ -1,6 +1,7 @@
 @recipe(IntentPlot, ibn, idx) do scene
     Theme(
-        showstate = false
+        showstate = false,
+        showintent = false
     )
 end
 
@@ -13,11 +14,14 @@ function Makie.plot!(intplot::IntentPlot)
         labelbuilder = IOBuffer()
 
         uuid = @sprintf("%x", getfield(MINDF.getidagnodeid(idagnode), :value))
-        print(labelbuilder, uuid)
+        println(labelbuilder, uuid)
 
+        if intplot.showintent[]
+            println(labelbuilder, MINDF.getintent(idagnode))
+        end
         if intplot.showstate[]
             state = string(MINDF.getidagnodestate(idagnode))            
-            print(labelbuilder, "-", state)
+            println(labelbuilder, state)
         end
 
         push!(labs, String(take!(labelbuilder)))

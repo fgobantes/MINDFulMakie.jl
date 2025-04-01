@@ -53,7 +53,7 @@ function _recursive_createmultidomainIBNAttributeGraph!(mdag::MINDF.IBNAttribute
 
     push!(ibnfuuids, ibnfid)
 
-    for interibnf in MINDF.getinteribnfs(remoteibnf)
+    for interibnf in MINDF.getibnfhandlers(remoteibnf)
         _recursive_createmultidomainIBNAttributeGraph!(mdag, ibnfuuids, myibnf, interibnf)
     end
 end

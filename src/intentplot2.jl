@@ -5,6 +5,7 @@
     )
 end
 
+#TODO plot only descendants of the idagnode
 function Makie.plot!(intplot::IntentPlot)
     idag = MINDF.getidag(intplot.ibn[])
     idagnode = MINDF.getidagnode(idag, intplot.idx[])
@@ -36,7 +37,16 @@ function Makie.plot!(intplot::IntentPlot)
     #     finallabs = labs
     # end
 
-    GraphMakie.graphplot!(intplot, idag; layout=daglayout(idag), nlabels=labs)
+    try 
+        GraphMakie.graphplot!(intplot, idag; layout=daglayout(idag), nlabels=labs)
+    catch e
+        if e isa MathOptInterface.ResultIndexBoundsError{MathOptInterface.ObjectiveValue}
+            # without special layout
+            GraphMakie.graphplot!(intplot, idag; nlabels=labs)
+        else 
+            rethrow(e)
+        end
+    end
     # GraphMakie.graphplot!(intplot, idag; layout=daglayout(idag), nlabels=labs)
 
     return intplot

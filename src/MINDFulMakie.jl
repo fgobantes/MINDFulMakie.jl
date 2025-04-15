@@ -7,6 +7,7 @@ using DocStringExtensions
 using UUIDs
 using Printf
 
+import MathOptInterface
 import AbstractTrees
 
 # TODO: delete

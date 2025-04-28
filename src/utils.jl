@@ -58,3 +58,8 @@ function _recursive_createmultidomainIBNAttributeGraph!(mdag::MINDF.IBNAttribute
     end
 end
 
+
+function pathtolines(path, positions)
+    pos = positions[path]
+    return [GraphMakie.Line(p1, p2) for (p1,p2) in zip(pos[1:end-1], pos[2:end])]
+end

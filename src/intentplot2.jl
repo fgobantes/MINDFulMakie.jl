@@ -1,4 +1,9 @@
-@recipe(IntentPlot, ibn, idx) do scene
+"""
+    Plot the intent dag with the following options
+    - `showstate = false`
+    - `showintent = false`
+"""
+@recipe(IntentPlot, ibnf, intentid) do scene
     Theme(
         showstate = false,
         showintent = false
@@ -7,38 +12,42 @@ end
 
 #TODO plot only descendants of the idagnode
 function Makie.plot!(intplot::IntentPlot)
-    idag = MINDF.getidag(intplot.ibn[])
-    idagnode = MINDF.getidagnode(idag, intplot.idx[])
+    idag = MINDF.getidag(intplot.ibnf[])
+    idagnode = MINDF.getidagnode(idag, intplot.intentid[])
 
-    labs = String[]
-    for idagnode in MINDF.getidagnodes(idag)
-        labelbuilder = IOBuffer()
+    subgraph_subgraphvmap = lift(intplot.ibnf, intplot.intentid) do ibnf, intentid
+        idag = MINDF.getidag(ibnf)
+        involvedgraphnodes = MINDF.getidagnodeidxsdescendants(idag, intentid; includeroot=true)
+        Graphs.induced_subgraph(AG.getgraph(idag), involvedgraphnodes)
+    end
+    subgraphob = @lift $(subgraph_subgraphvmap)[1]
+    subgraphvmapob = @lift $(subgraph_subgraphvmap)[2]
 
-        uuid = @sprintf("%x", getfield(MINDF.getidagnodeid(idagnode), :value))
-        println(labelbuilder, uuid)
+    labsob = lift(intplot.ibnf, intplot.showintent, intplot.showstate, subgraphvmapob) do ibnf, showintent, showstate, subgraphvmap
+        idag = MINDF.getidag(ibnf)
+        labs = String[]
+        for idagnode in MINDF.getidagnodes(idag)[subgraphvmap]
+            labelbuilder = IOBuffer()
 
-        if intplot.showintent[]
-            println(labelbuilder, MINDF.getintent(idagnode))
+            uuid = @sprintf("%x", getfield(MINDF.getidagnodeid(idagnode), :value))
+            println(labelbuilder, uuid)
+
+            if showintent
+                println(labelbuilder, MINDF.getintent(idagnode))
+            end
+            if showstate
+                state = string(MINDF.getidagnodestate(idagnode))            
+                println(labelbuilder, state)
+            end
+
+            push!(labs, String(take!(labelbuilder)))
         end
-        if intplot.showstate[]
-            state = string(MINDF.getidagnodestate(idagnode))            
-            println(labelbuilder, state)
-        end
-
-        push!(labs, String(take!(labelbuilder)))
+        labs
     end
 
-    # labs = [@sprintf("%x", d) for d in  getfield.(MINDF.getidagnodeid.(MINDF.getidagnodes(idag)), :value)]
-    # stateslabs = [string.(MINDF.getidagnodeid.(MINDF.getidagnodes(idag)))]
-
-    # if intplot.showstate == true
-    #     finallabs = join.(labs, stateslabs
-    # else
-    #     finallabs = labs
-    # end
-
     try 
-        GraphMakie.graphplot!(intplot, idag; layout=daglayout(idag), nlabels=labs)
+        subgraphlayoutob = @lift daglayout($(subgraphob))
+        GraphMakie.graphplot!(intplot, subgraphob; layout=subgraphlayoutob, nlabels=labsob)
     catch e
         if e isa MathOptInterface.ResultIndexBoundsError{MathOptInterface.ObjectiveValue}
             # without special layout
@@ -47,7 +56,6 @@ function Makie.plot!(intplot::IntentPlot)
             rethrow(e)
         end
     end
-    # GraphMakie.graphplot!(intplot, idag; layout=daglayout(idag), nlabels=labs)
 
     return intplot
 end

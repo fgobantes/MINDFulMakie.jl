@@ -1,6 +1,59 @@
 function coordlayout(ibnag::IBNAttributeGraph)
     xs = [[getlongitude(nodeprop), getlatitude(nodeprop)] for nodeprop in MINDF.getnodeproperties.(AG.vertex_attr(ibnag))]
+using MINDFul: IBNFramework
     return [Point(x...) for x in xs ]
+end
+
+"""
+$(TYPEDSIGNATURES) 
+
+Get a Dict of IntentDAG with keys being the `IBNFramework` uuid
+"""
+function getmultidomainIntentDAGs(ibnf::MINDF.IBNFramework)
+    idagsdict = Dict{UUID, IntentDAG}()
+    ibnfuuidschecked = UUID[]
+    _recursive_getmultidomainIntentDAGs!(idagsdict, ibnfuuidschecked, ibnf, ibnf)
+    return idagsdict
+end
+
+function _recursive_getmultidomainIntentDAGs!(idagsdict::Dict{UUID, IntentDAG}, ibnfuuidchecked::Vector{UUID}, myibnf, remoteibnf)
+    remoteibnfid = getibnfid(remoteibnf)
+    remoteibnfid ∈ ibnfuuidchecked && return
+    push!(ibnfuuidchecked, remoteibnfid)
+    idagsdict[remoteibnfid] = requestidag_init(myibnf, remoteibnf)
+    for interibnf in MINDF.getibnfhandlers(myibnf)
+        _recursive_getmultidomainIntentDAGs!(idagsdict, ibnfuuidchecked, myibnf, interibnf)
+    end
+    return 
+end
+
+"""
+$(TYPEDSIGNATURES) 
+Return a `Vector{Tuple{UUID, UUID}}`, with the first being the ibnfid and the second the intent id.
+Start from ibnfid, and intentid
+"""
+function getmultidomainremoteintents(idagsdict::Dict{UUID, IntentDAG}, ibnfid::UUID, intentid::UUID, subidag::Symbol)
+    remoteintents = Vector{Tuple{UUID, UUID}}()
+    # previous idagnode connection of the remote. To cross connect to intent DAGs.
+    remoteintents_precon = Vector{Tuple{UUID, UUID}}()
+    _recursive_getmultidomainremoteintents!(remoteintents, remoteintents_precon, idagsdict, ibnfid, intentid, subidag)
+    return remoteintents, remoteintents_precon
+end
+
+function _recursive_getmultidomainremoteintents!(remoteintents::Vector{Tuple{UUID, UUID}}, remoteintents_precon::Vector{Tuple{UUID, UUID}}, idagsdict::Dict{UUID, IntentDAG}, ibnfid::UUID, intentid::UUID, subidag::Symbol)
+    idag = idagsdict[ibnfid]
+    involvedgraphnodes = getinvolvednodespersymbol(idag, intentid, subidag)
+    for idagnode in MINDF.getidagnodes(idag)[involvedgraphnodes]
+        if getintent(idagnode) isa RemoteIntent && MINDF.getisinitiator(getintent(idagnode))
+            tup = (getibnfid(getintent(idagnode)), getidagnodeid(getintent(idagnode)))
+            tupprev = (ibnfid, getidagnodeid(idagnode))
+            if tup ∉ remoteintents
+                push!(remoteintents, tup)
+                push!(remoteintents_precon, (ibnfid, getidagnodeid(idagnode)))
+                _recursive_getmultidomainremoteintents!(remoteintents, remoteintents_precon, idagsdict, tup... , subidag)
+            end
+        end
+    end
 end
 
 """
@@ -19,7 +72,7 @@ function createmultidomainIBNAttributeGraph(ibnf::MINDF.IBNFramework)
     return mdag
 end
 
-function _recursive_createmultidomainIBNAttributeGraph!(mdag::MINDF.IBNAttributeGraph, ibnfuuids::Vector{UUID}, myibnf::MINDF.IBNFramework, remoteibnf::MINDF.IBNFramework)
+function _recursive_createmultidomainIBNAttributeGraph!(mdag::MINDF.IBNAttributeGraph, ibnfuuids::Vector{UUID}, myibnf, remoteibnf)
     ibnfid = MINDF.getibnfid(remoteibnf)
     ibnfid ∈ ibnfuuids && return
     remoteibnag = MINDF.requestibnattributegraph(myibnf, remoteibnf)
@@ -33,7 +86,9 @@ function _recursive_createmultidomainIBNAttributeGraph!(mdag::MINDF.IBNAttribute
             add_vertex!(mdag)
             push!(AG.vertex_attr(mdag), nodeview)
         else
-            AG.vertex_attr(mdag)[foundindex] = nodeview
+            if MINDF.isnodeviewinternal(nodeview)
+                AG.vertex_attr(mdag)[foundindex] = nodeview
+            end
         end
     end
 
@@ -63,3 +118,20 @@ function pathtolines(path, positions)
     pos = positions[path]
     return [GraphMakie.Line(p1, p2) for (p1,p2) in zip(pos[1:end-1], pos[2:end])]
 end
+
+function euklideandistance(p1, p2)
+    return sqrt( sum((p2 .- p1).^2) )
+end
+
+function getinvolvednodespersymbol(idag::IntentDAG, intentid::UUID, subidag::Symbol)
+    if subidag == :connected
+        return MINDF.getidagnodeidxsconnected(idag, intentid)
+    elseif subidag == :descendants
+        return MINDF.getidagnodeidxsdescendants(idag, intentid; includeroot=true)
+    elseif subidag == :exclusivedescendants
+        return MINDF.getidagnodeidxsdescendants(idag, intentid; includeroot=true, exclusive=true)
+    elseif subidag == :all
+        return vertices(idag)
+    end
+end
+

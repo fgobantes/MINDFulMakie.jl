@@ -14,7 +14,10 @@ Plot the path for the connectivity intent
         multidomain = true,
         shownodelabels = nothing,
         intentuuid = nothing,
-        showonlyinstalledintents = false
+        showonlyinstalledintents = false,
+        spectrumdistancefromedge = 0.0,
+        spectrumdistancefromvertex = 0.0,
+        spectrumverticalheight = 0.1
     )
 end
 
@@ -71,21 +74,83 @@ function Makie.plot!(ibnplot::IBNPlot)
             pathtolines(ibnaglocalnodepath, node_pos)
         end
         # get globalnodepath from all the RemoteIntent nodes that are also initiators
-        remoteintents = filter(MINDF.getintent.(MINDF.getidagnodedescendants(MINDF.getidag(ibnf), intentuuid))) do intentdescendant
-            intentdescendant isa MINDF.RemoteIntent && MINDF.getisinitiator(intentdescendant)
-        end
-        for remoteintent in remoteintents
-            remoteibnfid = MINDF.getibnfid(remoteintent)
-            remoteintentuuid = MINDF.getidagnodeid(remoteintent)
-            globalnodepath = MINDF.requestintentglobalpath_init(ibnf, MINDF.getibnfhandler(ibnf, remoteibnfid), remoteintentuuid; onlyinstalled=false)
-            ibnaglocalnodepath = map(gn -> MINDF.getnodeindex(ibnag, gn), globalnodepath)
-            push!(extralines, pathtolines(ibnaglocalnodepath, node_pos)...)
+        if !isnothing(intentuuid)
+            remoteintents = filter(MINDF.getintent.(MINDF.getidagnodedescendants(MINDF.getidag(ibnf), intentuuid))) do intentdescendant
+                intentdescendant isa MINDF.RemoteIntent && MINDF.getisinitiator(intentdescendant)
+            end
+            for remoteintent in remoteintents
+                remoteibnfid = MINDF.getibnfid(remoteintent)
+                remoteintentuuid = MINDF.getidagnodeid(remoteintent)
+                globalnodepath = MINDF.requestintentglobalpath_init(ibnf, MINDF.getibnfhandler(ibnf, remoteibnfid), remoteintentuuid; onlyinstalled=false)
+                ibnaglocalnodepath = map(gn -> MINDF.getnodeindex(ibnag, gn), globalnodepath)
+                push!(extralines, pathtolines(ibnaglocalnodepath, node_pos)...)
+            end
         end
         extralines
     end
 
     edgeplot!(ibnplot, extralines; color=(:blue, 0.5), linewidth=10)
 
-   
+    # spectrum slots
+    ss = lift(ibnag) do ibnag 
+        [MINDF.getfiberspectrumavailabilities(ibnag, e) for e in edges(ibnag)]
+    end
+
+    # p1 = gmp.node_pos[][1]
+    # _p2 = gmp.node_pos[][2]
+    # _p3 = gmp.node_pos[][3]
+    # _p4 = gmp.node_pos[][4]
+    # p2 = gmp.node_pos[][4]
+    # distance = euklideandistance(p1, p2)
+    # unitvector = (p2 .- p1) ./ distance
+    # verticalunitvector = [-unitvector[2], +unitvector[1]]
+    # negatedverticalunitvector = -verticalunitvector
+    # horizontalmult = distance / 50
+    # verticalheight = 0.1
+    # spec1 = Point2f[p1, p1+verticalunitvector*verticalheight, p1+verticalunitvector*verticalheight+unitvector*horizontalmult, p1+unitvector*horizontalmult]
+    # p1p = p1+unitvector*horizontalmult*1.2 
+    # spec2 = Point2f[p1p, p1p+verticalunitvector*verticalheight, p1p+verticalunitvector*verticalheight+unitvector*horizontalmult, p1p+unitvector*horizontalmult]
+    # @show typeof([spec1, spec2])
+    # poly!(ibnplot, [spec1, spec2], color=[:blue, :black])
+    # poly!(ibnplot, Point2f[p1, _p2, _p3, _p4])
+
+    spectrumpolyscolors = lift(ibnag, gmp.node_pos, ibnplot.spectrumdistancefromvertex, ibnplot.spectrumverticalheight, ibnplot.spectrumdistancefromedge) do ibnag, node_pos, spectrumdistancefromvertex, spectrumverticalheight, spectrumdistancefromedge
+        drawspectrumboxes(ibnag, node_pos, spectrumdistancefromvertex, spectrumverticalheight, spectrumdistancefromedge)
+    end
+    spectrumpolys = @lift $(spectrumpolyscolors)[1]
+    spectrumcolors = @lift $(spectrumpolyscolors)[2]
+
+    polyplots = poly!(ibnplot, spectrumpolys; color=spectrumcolors)
+    translate!(polyplots, 0, 0, -1)
+
     return ibnplot
+end
+
+function drawspectrumboxes(ibnag::IBNAttributeGraph, node_pos::Vector{Point2f}, spectrumdistancefromvertex::Real, spectrumverticalheight::Real, spectrumdistancefromedge::Real)
+    polys = Vector{Vector{Point2f}}()
+    colors = Vector{Colors.RGB}()
+    for ed in edges(ibnag)
+        p1 = node_pos[src(ed)]
+        p2 = node_pos[dst(ed)]
+        distance = euklideandistance(p1, p2)
+        unitvector = (p2 .- p1) ./ distance
+        verticalunitvector = [-unitvector[2], +unitvector[1]]
+
+        spectrumavailabilities = MINDF.getfiberspectrumavailabilities(ibnag, ed)
+        spectrumdistancefromvertex_abs = spectrumdistancefromvertex*distance
+        horizontalmult = (distance - 2spectrumdistancefromvertex_abs) / length(spectrumavailabilities)
+        p1p = p1 + unitvector * spectrumdistancefromvertex_abs + verticalunitvector * spectrumdistancefromedge
+        incrementhorizontally = unitvector*horizontalmult
+        incrementvertically = verticalunitvector*spectrumverticalheight
+        for spectrumslotavailability in spectrumavailabilities
+            specpoly = Point2f[p1p, p1p+incrementvertically, p1p+incrementvertically+incrementhorizontally, p1p+incrementhorizontally]
+            push!(polys, specpoly)
+            if !spectrumslotavailability
+                @info "found some!"
+            end
+            push!(colors, spectrumslotavailability ? Colors.alphacolor(Colors.@colorant_str("gray"), 0.0) : Colors.alphacolor(Colors.@colorant_str("red"), 0.0))
+            p1p += unitvector*horizontalmult
+        end
+    end
+    return polys, colors
 end

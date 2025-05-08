@@ -14,8 +14,8 @@ function coordlayout(gr::AttributeGraph)
 end
 
 """
-    intentplot(ibn::IBNF)
-    intentplot!(ax, ibn::IBNF)
+    ibnfplot(ibn::IBNF)
+    ibnfplot!(ax, ibn::IBNF)
 
 Creates a graph plot of the `ibn`.
 

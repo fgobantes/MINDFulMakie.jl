@@ -2,34 +2,59 @@
     Plot the intent dag with the following options
     - `showstate = false`
     - `showintent = false`
+    - `subidag = [:descendants, :exclusivedescendants, :all, :connected, :multidomain]
+`:descendants` plots only child intents and their childs and so on, 
+`:exclusivedescendants` plots only child intents that do not have multiple parents, 
+`:all` plots all nodes in the intent dag (`intentid` is not really needed),
+`:connected` plots all nodes that are connected
+    - `multidomain` = false
 """
 @recipe(IntentPlot, ibnf, intentid) do scene
     Theme(
         showstate = false,
-        showintent = false
+        showintent = false,
+        subidag = :descendants,
+        multidomain = false
     )
 end
 
 #TODO plot only descendants of the idagnode
 function Makie.plot!(intplot::IntentPlot)
-    idag = MINDF.getidag(intplot.ibnf[])
-    idagnode = MINDF.getidagnode(idag, intplot.intentid[])
+    # subgraph_subgraphvmap = lift(intplot.ibnf, intplot.intentid, intplot.subidag) do ibnf, intentid, subidag
+    #     idag = MINDF.getidag(ibnf)
+    #     involvedgraphnodes = getinvolvednodespersymbol(idag, intentid, subidag)
+    #     Graphs.induced_subgraph(AG.getgraph(idag), involvedgraphnodes)
+    # end
+    # subgraphob = @lift $(subgraph_subgraphvmap)[1]
+    # subgraphvmapob = @lift $(subgraph_subgraphvmap)[2]
 
-    subgraph_subgraphvmap = lift(intplot.ibnf, intplot.intentid) do ibnf, intentid
-        idag = MINDF.getidag(ibnf)
-        involvedgraphnodes = MINDF.getidagnodeidxsdescendants(idag, intentid; includeroot=true)
-        Graphs.induced_subgraph(AG.getgraph(idag), involvedgraphnodes)
+    # if intplot.multidomain[]
+    md_obs = lift(intplot.ibnf, intplot.intentid, intplot.subidag) do ibnf, intentid, subidag
+        idagsdict = getmultidomainIntentDAGs(ibnf)
+        remoteintents, remoteintents_precon = getmultidomainremoteintents(idagsdict, getibnfid(ibnf), intentid, subidag)
+        mdidag, mdidagmap = buildmdidagandmap(idagsdict, getibnfid(ibnf), intentid, remoteintents, remoteintents_precon, subidag)
+        return idagsdict, mdidag, mdidagmap
     end
-    subgraphob = @lift $(subgraph_subgraphvmap)[1]
-    subgraphvmapob = @lift $(subgraph_subgraphvmap)[2]
+    idagsdict_obs = @lift $(md_obs)[1]
+    mdidag_obs = @lift $(md_obs)[2]
+    mdidagmap_obs = @lift $(md_obs)[3]
 
-    labsob = lift(intplot.ibnf, intplot.showintent, intplot.showstate, subgraphvmapob) do ibnf, showintent, showstate, subgraphvmap
-        idag = MINDF.getidag(ibnf)
+    edgecolors = lift(idagsdict_obs, mdidag_obs, mdidagmap_obs) do idagdict, mdidag, mdidagmap
+        [let
+            mdidagmap[src(e)][1] == mdidagmap[dst(e)][1] ? :black : :red
+         end 
+         for e in edges(mdidag)]
+    end
+@show edgecolors[]
+
+    labsob = lift(intplot.ibnf, intplot.showintent, intplot.showstate, idagsdict_obs, mdidagmap_obs) do ibnf, showintent, showstate, idagsdict, mdidagmap
         labs = String[]
-        for idagnode in MINDF.getidagnodes(idag)[subgraphvmap]
+
+        for (ibnfid, intentid) in mdidagmap
+            idagnode = getidagnodefrommultidomain(idagsdict, ibnfid, intentid)
             labelbuilder = IOBuffer()
 
-            uuid = @sprintf("%x", getfield(MINDF.getidagnodeid(idagnode), :value))
+            uuid = @sprintf("%x, %x", getfield(ibnfid, :value), getfield(MINDF.getidagnodeid(idagnode), :value))
             println(labelbuilder, uuid)
 
             if showintent
@@ -45,13 +70,14 @@ function Makie.plot!(intplot::IntentPlot)
         labs
     end
 
+
     try 
-        subgraphlayoutob = @lift daglayout($(subgraphob))
-        GraphMakie.graphplot!(intplot, subgraphob; layout=subgraphlayoutob, nlabels=labsob)
+        subgraphlayoutob = @lift daglayout($(mdidag_obs))
+        GraphMakie.graphplot!(intplot, mdidag_obs; layout=subgraphlayoutob, nlabels=labsob, edge_color=edgecolors)
     catch e
         if e isa MathOptInterface.ResultIndexBoundsError{MathOptInterface.ObjectiveValue}
             # without special layout
-            GraphMakie.graphplot!(intplot, idag; nlabels=labs)
+            GraphMakie.graphplot!(intplot, mdidag; nlabels=labsob)
         else 
             rethrow(e)
         end
@@ -83,4 +109,60 @@ function rotatecoords!(xs::AbstractVector, ys::AbstractVector, paths::AbstractDi
         newpath = [r * pointvec for pointvec in vcat.(v...)]
         paths[k] = (getindex.(newpath, 1), getindex.(newpath, 2))
     end
+end
+
+"""
+Starting from (ibnfid, intentid) construct the multi domain intent DAG
+Return the mdidag and the mapping as `(ibnfid, intentid)`
+"""
+function buildmdidagandmap(idagsdict::Dict{UUID, IntentDAG}, ibnfid::UUID, intentid::UUID, remoteintents::Vector{Tuple{UUID, UUID}}, remoteintents_precon::Vector{Tuple{UUID, UUID}}, subidag::Symbol)
+    mdidag = SimpleDiGraph{Int}()
+    mdidagmap = Vector{Tuple{UUID, UUID}}()
+
+    addgraphtograph!(mdidag, mdidagmap, idagsdict, ibnfid, intentid, subidag)
+
+    for ((previbnfid, previntentid), (ibnfid, intentid)) in zip(remoteintents_precon, remoteintents)
+        addgraphtograph!(mdidag, mdidagmap, idagsdict, ibnfid, intentid, subidag)
+        src_ibnfid_intentid = (previbnfid, previntentid)
+        dst_ibnfid_intentid = (ibnfid, intentid)
+        srcidx = something(findfirst(==(src_ibnfid_intentid), mdidagmap))
+        dstidx = something(findfirst(==(dst_ibnfid_intentid), mdidagmap))
+        add_edge!(mdidag, srcidx, dstidx)
+    end
+    return mdidag, mdidagmap
+end
+
+function addgraphtograph!(mdidag::SimpleDiGraph, mdidagmap::Vector{Tuple{UUID, UUID}}, idagsdict::Dict{UUID,IntentDAG}, ibnfid::UUID, intentid::UUID, subidag::Symbol)
+    idag = idagsdict[ibnfid]
+    involvedgraphnodes = getinvolvednodespersymbol(idag, intentid, subidag)
+    subgraph, subgraphvmap = Graphs.induced_subgraph(AG.getgraph(idag), involvedgraphnodes)
+    idagnodes = getidagnodes(idag)
+
+    for remv in subgraphvmap
+        tuptoadd = (ibnfid, getidagnodeid(idagnodes[remv]))
+        if tuptoadd ∉ mdidagmap
+            add_vertex!(mdidag)
+            push!(mdidagmap, tuptoadd)
+        end
+    end
+    for reme in edges(subgraph)
+        src_ibnfid_intentid = (ibnfid, getidagnodeid(idagnodes[ subgraphvmap[src(reme)] ]))
+        dst_ibnfid_intentid = (ibnfid, getidagnodeid(idagnodes[ subgraphvmap[dst(reme)] ]))
+        srcidx = something(findfirst(==(src_ibnfid_intentid), mdidagmap))
+        dstidx = something(findfirst(==(dst_ibnfid_intentid), mdidagmap))
+        add_edge!(mdidag, srcidx, dstidx)
+    end
+end
+
+function getidagnodesfrommultidomain(mdidagmap::Vector{Tuple{UUID, UUID}}, idagsdict::Dict{UUID, IntentDAG})
+    [getidagnodefrommultidomain(idagsdict, ibnfid, intentid) for (ibnfid, intentid) in mdidagmap]
+end
+
+function getidagnodefrommultidomain(idagsdict::Dict{UUID, IntentDAG}, ibnfid::UUID, intentid::UUID)
+    return getidagnode(idagsdict[ibnfid], intentid)
+end
+
+function getidagnodefrommultidomain(idagsdict::Dict{UUID, IntentDAG}, mdidagmap::Vector{Tuple{UUID, UUID}}, v::Int)
+    ibnfid, intentid = mdidagmap[v]
+    return getidagnodefrommultidomain(idagsdict, ibnfid, intentid)
 end

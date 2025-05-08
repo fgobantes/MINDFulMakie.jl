@@ -14,7 +14,7 @@ import AbstractTrees
 import MetaGraphsNext as MGN
 
 import AttributeGraphs as AG
-import MINDFul: IBNAttributeGraph, getlatitude, getlongitude
+import MINDFul: IBNAttributeGraph, getlatitude, getlongitude, IntentDAG, getibnfid, getidag, requestidag_init, getintent, RemoteIntent, getidagnodeid, getidagnodes, getidagnode
 
 export ibnfplot, ibnfplot!, intentplot, intentplot!, netgraphplot, netgraphplot!
 #export showgtk, showgtk!
@@ -28,5 +28,7 @@ include("netgraphplot2.jl")
 include("ibnplot2.jl")
 # include("intentplot.jl")
 include("intentplot2.jl")
+
+include("temp.jl")
 
 end

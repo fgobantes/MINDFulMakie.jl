@@ -45,7 +45,6 @@ function Makie.plot!(intplot::IntentPlot)
          end 
          for e in edges(mdidag)]
     end
-@show edgecolors[]
 
     labsob = lift(intplot.ibnf, intplot.showintent, intplot.showstate, idagsdict_obs, mdidagmap_obs) do ibnf, showintent, showstate, idagsdict, mdidagmap
         labs = String[]

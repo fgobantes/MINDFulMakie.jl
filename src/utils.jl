@@ -1,6 +1,5 @@
 function coordlayout(ibnag::IBNAttributeGraph)
     xs = [[getlongitude(nodeprop), getlatitude(nodeprop)] for nodeprop in MINDF.getnodeproperties.(AG.vertex_attr(ibnag))]
-using MINDFul: IBNFramework
     return [Point(x...) for x in xs ]
 end
 

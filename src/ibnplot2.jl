@@ -96,24 +96,6 @@ function Makie.plot!(ibnplot::IBNPlot)
         [MINDF.getfiberspectrumavailabilities(ibnag, e) for e in edges(ibnag)]
     end
 
-    # p1 = gmp.node_pos[][1]
-    # _p2 = gmp.node_pos[][2]
-    # _p3 = gmp.node_pos[][3]
-    # _p4 = gmp.node_pos[][4]
-    # p2 = gmp.node_pos[][4]
-    # distance = euklideandistance(p1, p2)
-    # unitvector = (p2 .- p1) ./ distance
-    # verticalunitvector = [-unitvector[2], +unitvector[1]]
-    # negatedverticalunitvector = -verticalunitvector
-    # horizontalmult = distance / 50
-    # verticalheight = 0.1
-    # spec1 = Point2f[p1, p1+verticalunitvector*verticalheight, p1+verticalunitvector*verticalheight+unitvector*horizontalmult, p1+unitvector*horizontalmult]
-    # p1p = p1+unitvector*horizontalmult*1.2 
-    # spec2 = Point2f[p1p, p1p+verticalunitvector*verticalheight, p1p+verticalunitvector*verticalheight+unitvector*horizontalmult, p1p+unitvector*horizontalmult]
-    # @show typeof([spec1, spec2])
-    # poly!(ibnplot, [spec1, spec2], color=[:blue, :black])
-    # poly!(ibnplot, Point2f[p1, _p2, _p3, _p4])
-
     spectrumpolyscolors = lift(ibnag, gmp.node_pos, ibnplot.spectrumdistancefromvertex, ibnplot.spectrumverticalheight, ibnplot.spectrumdistancefromedge) do ibnag, node_pos, spectrumdistancefromvertex, spectrumverticalheight, spectrumdistancefromedge
         drawspectrumboxes(ibnag, node_pos, spectrumdistancefromvertex, spectrumverticalheight, spectrumdistancefromedge)
     end
@@ -145,9 +127,6 @@ function drawspectrumboxes(ibnag::IBNAttributeGraph, node_pos::Vector{Point2f}, 
         for spectrumslotavailability in spectrumavailabilities
             specpoly = Point2f[p1p, p1p+incrementvertically, p1p+incrementvertically+incrementhorizontally, p1p+incrementhorizontally]
             push!(polys, specpoly)
-            if !spectrumslotavailability
-                @info "found some!"
-            end
             push!(colors, spectrumslotavailability ? Colors.alphacolor(Colors.@colorant_str("gray"), 0.0) : Colors.alphacolor(Colors.@colorant_str("red"), 0.0))
             p1p += unitvector*horizontalmult
         end

@@ -1,107 +1,95 @@
 """
-    intentplot(ibn::IBN, idx::Integer)
-    intentplot!(ax, ibn::IBN, idx::Integer)
-
-Creates a tree plot of the intent Directed Acyclic Graph (DAG) `idx`.
-
-## Attributes
-- `interdomain=false`: reach out to all domains (might malfunction)
-- `show_state=true`: shows the state of each intent DAG node
+Plot the intent dag with the following options
+  - `showstate = false`
+  - `showintent = false`
+  - `subidag = [:descendants, :exclusivedescendants, :all, :connected, :multidomain]
+`:descendants` plots only child intents and their childs and so on, 
+`:exclusivedescendants` plots only child intents that do not have multiple parents, 
+`:all` plots all nodes in the intent dag (`intentid` is not really needed),
+`:connected` plots all nodes that are connected
+    - `multidomain` = false
 """
-@recipe(IntentPlot, ibn, idx) do scene
-    Attributes(
-               interdomain = false,
-               show_state = true,
-               show_all = false,
-               multi_domain = false,
+@recipe(IntentPlot, ibnf, intentid) do scene
+    Theme(
+        showstate = false,
+        showintent = false,
+        subidag = :descendants,
+        multidomain = false
     )
 end
 
+#TODO plot only descendants of the idagnode
 function Makie.plot!(intplot::IntentPlot)
-    ibn = intplot[:ibn][]
-    idx = intplot[:idx][]
+    # subgraph_subgraphvmap = lift(intplot.ibnf, intplot.intentid, intplot.subidag) do ibnf, intentid, subidag
+    #     idag = MINDF.getidag(ibnf)
+    #     involvedgraphnodes = getinvolvednodespersymbol(idag, intentid, subidag)
+    #     Graphs.induced_subgraph(AG.getgraph(idag), involvedgraphnodes)
+    # end
+    # subgraphob = @lift $(subgraph_subgraphvmap)[1]
+    # subgraphvmapob = @lift $(subgraph_subgraphvmap)[2]
 
-    # dag = ibn[].intents[idx[]]
+    # if intplot.multidomain[]
+    md_obs = lift(intplot.ibnf, intplot.intentid, intplot.subidag) do ibnf, intentid, subidag
+        idagsdict = getmultidomainIntentDAGs(ibnf)
+        remoteintents, remoteintents_precon = getmultidomainremoteintents(idagsdict, getibnfid(ibnf), intentid, subidag)
+        mdidag, mdidagmap = buildmdidagandmap(idagsdict, getibnfid(ibnf), intentid, remoteintents, remoteintents_precon, subidag)
+        return idagsdict, mdidag, mdidagmap
+    end
+    idagsdict_obs = @lift $(md_obs)[1]
+    mdidag_obs = @lift $(md_obs)[2]
+    mdidagmap_obs = @lift $(md_obs)[3]
 
-    if intplot.show_all[] 
-        dag = getintentdag(ibn)
-    else
-        dag = plotablesubdag(getintentdag(ibn), idx)
+    edgecolors = lift(idagsdict_obs, mdidag_obs, mdidagmap_obs) do idagdict, mdidag, mdidagmap
+        [let
+            mdidagmap[src(e)][1] == mdidagmap[dst(e)][1] ? :black : :red
+         end 
+         for e in edges(mdidag)]
     end
-    if intplot.show_state[] == false
-        labs = [dagtext(dag[MGN.label_for(dag,v)].intent) for v in  vertices(dag)]
-    else 
-        labs = [let dagnode=dag[MGN.label_for(dag,v)]; dagtext(getintent(dagnode))*"\nstate=$(dagnode.state)\nuuid=$(getid(dagnode))"; end for v in  vertices(dag)]
+
+    labsob = lift(intplot.ibnf, intplot.showintent, intplot.showstate, idagsdict_obs, mdidagmap_obs) do ibnf, showintent, showstate, idagsdict, mdidagmap
+        labs = String[]
+
+        for (ibnfid, intentid) in mdidagmap
+            idagnode = getidagnodefrommultidomain(idagsdict, ibnfid, intentid)
+            labelbuilder = IOBuffer()
+
+            uuid = @sprintf("%x, %x", getfield(ibnfid, :value), getfield(MINDF.getidagnodeid(idagnode), :value))
+            println(labelbuilder, uuid)
+
+            if showintent
+                println(labelbuilder, MINDF.getintent(idagnode))
+            end
+            if showstate
+                state = string(MINDF.getidagnodestate(idagnode))            
+                println(labelbuilder, state)
+            end
+
+            push!(labs, String(take!(labelbuilder)))
+        end
+        labs
     end
-    labsalign = [length(outneighbors(dag, v)) == 0 ? (:center, :top) : (:center, :bottom)  for v in vertices(dag)]
-    GraphMakie.graphplot!(intplot, dag, layout=daglayout(dag), nlabels=labs, nlabels_align=labsalign)
+
+
+    try 
+        subgraphlayoutob = @lift daglayout($(mdidag_obs))
+        GraphMakie.graphplot!(intplot, mdidag_obs; layout=subgraphlayoutob, nlabels=labsob, edge_color=edgecolors)
+    catch e
+        if e isa MathOptInterface.ResultIndexBoundsError{MathOptInterface.ObjectiveValue}
+            # without special layout
+            GraphMakie.graphplot!(intplot, mdidag; nlabels=labsob)
+        else 
+            rethrow(e)
+        end
+    end
 
     return intplot
 end
+
 
 function daglayout(dag::AbstractGraph; angle=-π/2)
     xs, ys, paths = solve_positions(Zarate(), dag)
     rotatecoords!(xs, ys, paths, -π/2)
     (args...) -> Point2.(zip(xs,ys))
-end
-
-
-function plotablesubdag(dag::IntentDAG, uuid::UUID)
-    nds = unique(plotablesubdagnodes(dag.graph, MGN.code_for(dag, uuid)))
-    induced_subgraph(dag, nds)[1]
-end
-
-"""
-    plotablesubdagnodes(dag::AbstractGraph, nd::Integer)
-
-Return the nodes out of which a subdag of `dag` such that all direct descendants and direct ancestors are shown.
-I.e. do not show other children of parents (siblings or cousins). 
-However show married nodes (common child) and all their direct ancestors (not other children).
-The algorithm actually creates a DAG such that all paths have at most one stream of incoming edges (i.e. after follow an in-edge you cannot go out again)
-"""
-function plotablesubdagnodes(dag::T, node::U) where {T<:AbstractGraph, U<:Integer}
-    # nodes to collect
-    vs = [node]
-    _plotablesubdagnodes!(vs, dag, node, nothing, true)
-    return vs
-end
-
-function _plotablesubdagnodes!(vs, dag, node, parnode, goingout)
-    if goingout
-        for d in outneighbors(dag, node)
-            push!(vs, d)
-            _plotablesubdagnodes!(vs, dag, d, node, true)
-        end
-        for d in inneighbors(dag, node)
-            !isnothing(parnode) && parnode == d && continue
-            push!(vs, d)
-            _plotablesubdagnodes!(vs, dag, d, node, false)
-        end
-    else
-        for d in inneighbors(dag, node)
-            !isnothing(parnode) && parnode == d && continue
-            push!(vs, d)
-            _plotablesubdagnodes!(vs, dag, d, node, false)
-        end
-    end
-end
-
-
-"""
-    rotatecoords(xs::AbstractVector, ys::AbstractVector, paths::AbstractDict, θ)
-
-Rotate coordinates `xs`, `ys` and paths `paths` by `angle`
-"""
-function rotatecoords(xs::AbstractVector, ys::AbstractVector, paths::AbstractDict, θ)
-    # rotation matrix
-    r = [cos(θ) -sin(θ); sin(θ) cos(θ)]
-    points = vcat.(xs, ys)
-    newpoints = [r * pointvec for pointvec in points]
-    newpaths = Dict(k => let newpath = [r * pointvec for pointvec in vcat.(v...)]
-             (getindex.(newpath, 1), getindex.(newpath, 2))
-         end
-         for (k,v) in paths)
-    return getindex.(newpoints, 1), getindex.(newpoints, 2), newpaths
 end
 
 """
@@ -120,4 +108,60 @@ function rotatecoords!(xs::AbstractVector, ys::AbstractVector, paths::AbstractDi
         newpath = [r * pointvec for pointvec in vcat.(v...)]
         paths[k] = (getindex.(newpath, 1), getindex.(newpath, 2))
     end
+end
+
+"""
+Starting from (ibnfid, intentid) construct the multi domain intent DAG
+Return the mdidag and the mapping as `(ibnfid, intentid)`
+"""
+function buildmdidagandmap(idagsdict::Dict{UUID, IntentDAG}, ibnfid::UUID, intentid::UUID, remoteintents::Vector{Tuple{UUID, UUID}}, remoteintents_precon::Vector{Tuple{UUID, UUID}}, subidag::Symbol)
+    mdidag = SimpleDiGraph{Int}()
+    mdidagmap = Vector{Tuple{UUID, UUID}}()
+
+    addgraphtograph!(mdidag, mdidagmap, idagsdict, ibnfid, intentid, subidag)
+
+    for ((previbnfid, previntentid), (ibnfid, intentid)) in zip(remoteintents_precon, remoteintents)
+        addgraphtograph!(mdidag, mdidagmap, idagsdict, ibnfid, intentid, subidag)
+        src_ibnfid_intentid = (previbnfid, previntentid)
+        dst_ibnfid_intentid = (ibnfid, intentid)
+        srcidx = something(findfirst(==(src_ibnfid_intentid), mdidagmap))
+        dstidx = something(findfirst(==(dst_ibnfid_intentid), mdidagmap))
+        add_edge!(mdidag, srcidx, dstidx)
+    end
+    return mdidag, mdidagmap
+end
+
+function addgraphtograph!(mdidag::SimpleDiGraph, mdidagmap::Vector{Tuple{UUID, UUID}}, idagsdict::Dict{UUID,IntentDAG}, ibnfid::UUID, intentid::UUID, subidag::Symbol)
+    idag = idagsdict[ibnfid]
+    involvedgraphnodes = getinvolvednodespersymbol(idag, intentid, subidag)
+    subgraph, subgraphvmap = Graphs.induced_subgraph(AG.getgraph(idag), involvedgraphnodes)
+    idagnodes = getidagnodes(idag)
+
+    for remv in subgraphvmap
+        tuptoadd = (ibnfid, getidagnodeid(idagnodes[remv]))
+        if tuptoadd ∉ mdidagmap
+            add_vertex!(mdidag)
+            push!(mdidagmap, tuptoadd)
+        end
+    end
+    for reme in edges(subgraph)
+        src_ibnfid_intentid = (ibnfid, getidagnodeid(idagnodes[ subgraphvmap[src(reme)] ]))
+        dst_ibnfid_intentid = (ibnfid, getidagnodeid(idagnodes[ subgraphvmap[dst(reme)] ]))
+        srcidx = something(findfirst(==(src_ibnfid_intentid), mdidagmap))
+        dstidx = something(findfirst(==(dst_ibnfid_intentid), mdidagmap))
+        add_edge!(mdidag, srcidx, dstidx)
+    end
+end
+
+function getidagnodesfrommultidomain(mdidagmap::Vector{Tuple{UUID, UUID}}, idagsdict::Dict{UUID, IntentDAG})
+    [getidagnodefrommultidomain(idagsdict, ibnfid, intentid) for (ibnfid, intentid) in mdidagmap]
+end
+
+function getidagnodefrommultidomain(idagsdict::Dict{UUID, IntentDAG}, ibnfid::UUID, intentid::UUID)
+    return getidagnode(idagsdict[ibnfid], intentid)
+end
+
+function getidagnodefrommultidomain(idagsdict::Dict{UUID, IntentDAG}, mdidagmap::Vector{Tuple{UUID, UUID}}, v::Int)
+    ibnfid, intentid = mdidagmap[v]
+    return getidagnodefrommultidomain(idagsdict, ibnfid, intentid)
 end

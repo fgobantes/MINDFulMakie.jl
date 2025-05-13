@@ -2,4 +2,4 @@
 
 todo
 
-Have a look in https://github.com/UniStuttgart-IKR/MINDFulNotebookExamples.jl
+Have a look at the test

@@ -1,6 +1,8 @@
-using MINDFulMakie
-using Test
+include("initialize.jl")
+include("testsuite/ibngraphplot.jl")
+include("testsuite/ibnplot.jl")
+include("testsuite/intentplot.jl")
 
 @testset "MINDFulMakie.jl" begin
-    # Write your tests here.
+    include("testsuite/reftests.jl")
 end

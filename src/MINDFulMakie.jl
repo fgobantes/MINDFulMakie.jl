@@ -16,19 +16,13 @@ import MetaGraphsNext as MGN
 import AttributeGraphs as AG
 import MINDFul: IBNAttributeGraph, getlatitude, getlongitude, IntentDAG, getibnfid, getidag, requestidag_init, getintent, RemoteIntent, getidagnodeid, getidagnodes, getidagnode
 
-export ibnfplot, ibnfplot!, intentplot, intentplot!, netgraphplot, netgraphplot!
-#export showgtk, showgtk!
+export ibnplot, ibnplot!, intentplot, intentplot!, ibngraphplot, ibngraphplot!
 
 const MINDF = MINDFul
 
 include("utils.jl")
-# include("netgraphplot.jl")
-include("netgraphplot2.jl")
-# include("ibnplot.jl")
-include("ibnplot2.jl")
-# include("intentplot.jl")
-include("intentplot2.jl")
-
-include("temp.jl")
+include("ibngraphplot.jl")
+include("ibnplot.jl")
+include("intentplot.jl")
 
 end

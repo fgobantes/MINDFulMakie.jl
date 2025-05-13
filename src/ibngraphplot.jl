@@ -1,4 +1,8 @@
-
+"""
+Base function to plot an `AttributeGraph` made for `IBNFramework`
+  - `showmap = false`
+  - `shownodelocallabels = false`
+"""
 @recipe(IBNGraphPlot, ibnattributegraph) do scene
     Theme(
         showmap = false,

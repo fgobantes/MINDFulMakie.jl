@@ -10,3 +10,8 @@ TestSetExtensions = "98d24dd4-01ad-11ea-1b02-c9a08f80db04"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 UnitfulData = "479269fd-87c4-43d6-a395-02aad47d928b"
+
+[sources]
+MINDFulMakie = {path = ".."}
+MINDFul = {url = "https://github.com/UniStuttgart-IKR/MINDFul.jl"}
+

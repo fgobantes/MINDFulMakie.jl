@@ -5,3 +5,4 @@ MINDFulMakie = "23b02573-35f2-499b-a490-fd32d1f018b6"
 
 [sources]
 MINDFulMakie = {path = ".."}
+MINDFul = {url = "https://github.com/UniStuttgart-IKR/MINDFul.jl"}

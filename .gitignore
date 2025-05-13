@@ -2,3 +2,4 @@
 docs/build/
 *.cov
 test/assets/tmp/*
+Manifest.toml

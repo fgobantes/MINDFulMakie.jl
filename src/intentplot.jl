@@ -1,7 +1,9 @@
 """
 Plot the intent dag with the following options
   - `showstate = false`
-  - `showintent = false`
+  - `showintent = false`,
+  - `intentid = nothing`
+Plot the intent DAG based on the given intent
   - `subidag = [:descendants, :exclusivedescendants, :all, :connected, :multidomain]
 `:descendants` plots only child intents and their childs and so on, 
 `:exclusivedescendants` plots only child intents that do not have multiple parents, 
@@ -9,10 +11,11 @@ Plot the intent dag with the following options
 `:connected` plots all nodes that are connected
     - `multidomain` = false
 """
-@recipe(IntentPlot, ibnf, intentid) do scene
+@recipe(IntentPlot, ibnf) do scene
     Theme(
         showstate = false,
         showintent = false,
+        intentid = nothing,
         subidag = :descendants,
         multidomain = false
     )
@@ -20,17 +23,8 @@ end
 
 #TODO plot only descendants of the idagnode
 function Makie.plot!(intplot::IntentPlot)
-    # subgraph_subgraphvmap = lift(intplot.ibnf, intplot.intentid, intplot.subidag) do ibnf, intentid, subidag
-    #     idag = MINDF.getidag(ibnf)
-    #     involvedgraphnodes = getinvolvednodespersymbol(idag, intentid, subidag)
-    #     Graphs.induced_subgraph(AG.getgraph(idag), involvedgraphnodes)
-    # end
-    # subgraphob = @lift $(subgraph_subgraphvmap)[1]
-    # subgraphvmapob = @lift $(subgraph_subgraphvmap)[2]
-
-    # if intplot.multidomain[]
-    md_obs = lift(intplot.ibnf, intplot.intentid, intplot.subidag) do ibnf, intentid, subidag
-        idagsdict = getmultidomainIntentDAGs(ibnf)
+    md_obs = lift(intplot.ibnf, intplot.intentid, intplot.subidag, intplot.multidomain) do ibnf, intentid, subidag, multidomain
+        idagsdict = multidomain ? getmultidomainIntentDAGs(ibnf) : Dict(getibnfid(ibnf) => getidag(ibnf))
         remoteintents, remoteintents_precon = getmultidomainremoteintents(idagsdict, getibnfid(ibnf), intentid, subidag)
         mdidag, mdidagmap = buildmdidagandmap(idagsdict, getibnfid(ibnf), intentid, remoteintents, remoteintents_precon, subidag)
         return idagsdict, mdidag, mdidagmap
@@ -114,13 +108,14 @@ end
 Starting from (ibnfid, intentid) construct the multi domain intent DAG
 Return the mdidag and the mapping as `(ibnfid, intentid)`
 """
-function buildmdidagandmap(idagsdict::Dict{UUID, IntentDAG}, ibnfid::UUID, intentid::UUID, remoteintents::Vector{Tuple{UUID, UUID}}, remoteintents_precon::Vector{Tuple{UUID, UUID}}, subidag::Symbol)
+function buildmdidagandmap(idagsdict::Dict{UUID, IntentDAG}, ibnfid::UUID, intentid::Union{UUID,Nothing}, remoteintents::Vector{Tuple{UUID, UUID}}, remoteintents_precon::Vector{Tuple{UUID, UUID}}, subidag::Symbol)
     mdidag = SimpleDiGraph{Int}()
     mdidagmap = Vector{Tuple{UUID, UUID}}()
 
     addgraphtograph!(mdidag, mdidagmap, idagsdict, ibnfid, intentid, subidag)
 
     for ((previbnfid, previntentid), (ibnfid, intentid)) in zip(remoteintents_precon, remoteintents)
+        haskey(idagsdict, ibnfid) || break
         addgraphtograph!(mdidag, mdidagmap, idagsdict, ibnfid, intentid, subidag)
         src_ibnfid_intentid = (previbnfid, previntentid)
         dst_ibnfid_intentid = (ibnfid, intentid)
@@ -131,7 +126,8 @@ function buildmdidagandmap(idagsdict::Dict{UUID, IntentDAG}, ibnfid::UUID, inten
     return mdidag, mdidagmap
 end
 
-function addgraphtograph!(mdidag::SimpleDiGraph, mdidagmap::Vector{Tuple{UUID, UUID}}, idagsdict::Dict{UUID,IntentDAG}, ibnfid::UUID, intentid::UUID, subidag::Symbol)
+function addgraphtograph!(mdidag::SimpleDiGraph, mdidagmap::Vector{Tuple{UUID, UUID}}, idagsdict::Dict{UUID,IntentDAG}, ibnfid::UUID, intentid::Union{UUID,Nothing}, subidag::Symbol)
+    haskey(idagsdict, ibnfid) || return
     idag = idagsdict[ibnfid]
     involvedgraphnodes = getinvolvednodespersymbol(idag, intentid, subidag)
     subgraph, subgraphvmap = Graphs.induced_subgraph(AG.getgraph(idag), involvedgraphnodes)

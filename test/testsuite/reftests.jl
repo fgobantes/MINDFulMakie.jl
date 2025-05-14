@@ -1,5 +1,4 @@
 @testset "reftests" begin
-    @show readdir(TMPDIR)
     for testfile in readdir(TMPDIR)
         testpath = joinpath(TMPDIR, testfile)
         reftestpath = joinpath(ASSETSDIR, "ref"*testfile)

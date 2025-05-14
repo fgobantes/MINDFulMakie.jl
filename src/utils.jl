@@ -30,7 +30,7 @@ $(TYPEDSIGNATURES)
 Return a `Vector{Tuple{UUID, UUID}}`, with the first being the ibnfid and the second the intent id.
 Start from ibnfid, and intentid
 """
-function getmultidomainremoteintents(idagsdict::Dict{UUID, IntentDAG}, ibnfid::UUID, intentid::UUID, subidag::Symbol)
+function getmultidomainremoteintents(idagsdict::Dict{UUID, IntentDAG}, ibnfid::UUID, intentid::Union{UUID,Nothing}, subidag::Symbol)
     remoteintents = Vector{Tuple{UUID, UUID}}()
     # previous idagnode connection of the remote. To cross connect to intent DAGs.
     remoteintents_precon = Vector{Tuple{UUID, UUID}}()
@@ -38,7 +38,8 @@ function getmultidomainremoteintents(idagsdict::Dict{UUID, IntentDAG}, ibnfid::U
     return remoteintents, remoteintents_precon
 end
 
-function _recursive_getmultidomainremoteintents!(remoteintents::Vector{Tuple{UUID, UUID}}, remoteintents_precon::Vector{Tuple{UUID, UUID}}, idagsdict::Dict{UUID, IntentDAG}, ibnfid::UUID, intentid::UUID, subidag::Symbol)
+function _recursive_getmultidomainremoteintents!(remoteintents::Vector{Tuple{UUID, UUID}}, remoteintents_precon::Vector{Tuple{UUID, UUID}}, idagsdict::Dict{UUID, IntentDAG}, ibnfid::UUID, intentid::Union{UUID,Nothing}, subidag::Symbol)
+    haskey(idagsdict, ibnfid) || return
     idag = idagsdict[ibnfid]
     involvedgraphnodes = getinvolvednodespersymbol(idag, intentid, subidag)
     for idagnode in MINDF.getidagnodes(idag)[involvedgraphnodes]
@@ -157,7 +158,7 @@ function euklideandistance(p1, p2)
     return sqrt( sum((p2 .- p1).^2) )
 end
 
-function getinvolvednodespersymbol(idag::IntentDAG, intentid::UUID, subidag::Symbol)
+function getinvolvednodespersymbol(idag::IntentDAG, intentid::Union{UUID,Nothing}, subidag::Symbol)
     if subidag == :connected
         return MINDF.getidagnodeidxsconnected(idag, intentid)
     elseif subidag == :descendants

@@ -1,6 +1,5 @@
 function coordlayout(ibnag::IBNAttributeGraph)
     xs = [[getlongitude(nodeprop), getlatitude(nodeprop)] for nodeprop in MINDF.getnodeproperties.(AG.vertex_attr(ibnag))]
-    return [Point(x...) for x in xs ]
 end
 
 """
@@ -59,6 +58,7 @@ end
 $(TYPEDSIGNATURES) 
 
 Construct a `IBNAttributeGraph` representation for all mutli-domain network from the IBNFramework neighboring `interIBNF`
+ATTENTION: the inner graph data are still representing information internally per domain.
 """
 function createmultidomainIBNAttributeGraph(ibnf::MINDF.IBNFramework)
     ibnfuuids = UUID[]
@@ -92,14 +92,7 @@ function _recursive_createmultidomainIBNAttributeGraph!(mdag::MINDF.IBNAttribute
     end
 
     for e in edges(remoteibnag)
-        globalnode_src = MINDF.getglobalnode(MINDF.getproperties(MINDF.getnodeview(remoteibnag, src(e))))
-        globalnode_dst = MINDF.getglobalnode(MINDF.getproperties(MINDF.getnodeview(remoteibnag, dst(e))))
-        # TODO find the globalnode index
-        src_idx = MINDF.findindexglobalnode(mdag, globalnode_src)
-        dst_idx = MINDF.findindexglobalnode(mdag, globalnode_dst)
-        (isnothing(src_idx) || isnothing(src_idx)) && error("global node not found in multi-domain attribute graph")
-        
-        offset_e = Edge(src_idx, dst_idx)
+        offset_e = findoffsetedge(mdag, remoteibnag, e)
         add_edge!(mdag, offset_e)
         edgeview = MINDF.getedgeview(remoteibnag, e)
         AG.edge_attr(mdag)[offset_e] = edgeview
@@ -112,9 +105,51 @@ function _recursive_createmultidomainIBNAttributeGraph!(mdag::MINDF.IBNAttribute
     end
 end
 
+"""
+Get a Dict{UUID, IBNAttributeGraph} with the ibnfid as key and the attribute graph as value.
+"""
+function getattributegraphneighbors(ibnf::MINDF.IBNFramework)
+    dictneiag = Dict{UUID, MINDF.IBNAttributeGraph}()
+    _recursive_getattributegraphneighbors(dictneiag, ibnf, ibnf)
+
+    return dictneiag
+end
+
+function _recursive_getattributegraphneighbors(dictneiag::Dict{UUID, MINDF.IBNAttributeGraph}, myibnf, remoteibnf)
+    ibnfid = MINDF.getibnfid(remoteibnf)
+    ibnfid ∈ keys(dictneiag) && return
+    remoteibnag = MINDF.requestibnattributegraph(myibnf, remoteibnf)
+    dictneiag[ibnfid] = remoteibnag
+    for interibnf in MINDF.getibnfhandlers(remoteibnf)
+        _recursive_getattributegraphneighbors(dictneiag, myibnf, interibnf)
+    end
+end
+
+function getcorrespondingibnagedge(mdag::MINDF.IBNAttributeGraph, edge::Edge, dictneiag::Dict{UUID, <: MINDF.IBNAttributeGraph})
+    srcglobalnode = MINDF.getglobalnode(MINDF.getproperties(MINDF.getnodeview(mdag, src(edge))))
+    dstglobalnode = MINDF.getglobalnode(MINDF.getproperties(MINDF.getnodeview(mdag, dst(edge))))
+    firstibnag = haskey(dictneiag, getibnfid(srcglobalnode)) ? dictneiag[getibnfid(srcglobalnode)] : dictneiag[getibnfid(dstglobalnode)]
+    src_idx = MINDF.findindexglobalnode(firstibnag, srcglobalnode)
+    dst_idx = MINDF.findindexglobalnode(firstibnag, dstglobalnode)
+    return firstibnag, Edge(src_idx, dst_idx)
+end
+
+function findoffsetedge(mdag::MINDF.IBNAttributeGraph, remoteibnag::MINDF.IBNAttributeGraph, e::Edge)
+    globalnode_src = MINDF.getglobalnode(MINDF.getproperties(MINDF.getnodeview(remoteibnag, src(e))))
+    globalnode_dst = MINDF.getglobalnode(MINDF.getproperties(MINDF.getnodeview(remoteibnag, dst(e))))
+    # TODO find the globalnode index
+    src_idx = MINDF.findindexglobalnode(mdag, globalnode_src)
+    dst_idx = MINDF.findindexglobalnode(mdag, globalnode_dst)
+    (isnothing(src_idx) || isnothing(src_idx)) && error("global node not found in multi-domain attribute graph")
+    
+    offset_e = Edge(src_idx, dst_idx)
+    return offset_e
+end
+
 
 function pathtolines(path, positions)
-    pos = positions[path]
+    nonothingpath = filter(!isnothing, path)
+    pos = positions[nonothingpath]
     return [GraphMakie.Line(p1, p2) for (p1,p2) in zip(pos[1:end-1], pos[2:end])]
 end
 

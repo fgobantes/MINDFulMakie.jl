@@ -25,6 +25,7 @@ function Makie.plot!(ibngraphplot::IBNGraphPlot)
         return nodelabs
     end
 
-    GraphMakie.graphplot!(ibngraphplot, ibnag; layout = x -> coordlayout(ibnag[]), arrow_show=false, edge_plottype=:linesegments, nlabels=nodelabs, ibngraphplot.attributes...)
+    coords = coordlayout(ibnag[])
+    GraphMakie.graphplot!(ibngraphplot, ibnag; layout = x -> coords, arrow_show=false, edge_plottype=:linesegments, nlabels=nodelabs, ibngraphplot.attributes...)
     return ibngraphplot
 end

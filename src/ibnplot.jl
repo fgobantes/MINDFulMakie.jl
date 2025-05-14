@@ -7,14 +7,20 @@ Possible values are `[:nothing, :local, :global]`
    - `multidomain = true`
    - `intentuuid = nothing`
 Plot the path for the connectivity intent
-   - `showuninstalledintents = false`
+   - `showonlyinstalledintents = false`
+Plot the spectrum slots with following properties
+   - `showspectrumslots = false`,
+   - `spectrumdistancefromedge = 0.0`,
+   - `spectrumdistancefromvertex = 0.0`,
+   - `spectrumverticalheight = 0.1`
 """
 @recipe(IBNPlot, ibnf) do scene
     Theme(
-        multidomain = true,
+        multidomain = false,
         shownodelabels = nothing,
         intentuuid = nothing,
         showonlyinstalledintents = false,
+        showspectrumslots = false,
         spectrumdistancefromedge = 0.0,
         spectrumdistancefromvertex = 0.0,
         spectrumverticalheight = 0.1
@@ -29,6 +35,14 @@ function Makie.plot!(ibnplot::IBNPlot)
             return createmultidomainIBNAttributeGraph(ibnf)
         else
             return MINDF.getibnag(ibnf)
+        end
+    end
+
+    dictneiag = lift(ibnplot.multidomain, ibnf) do multidomain, ibnf
+        if multidomain
+            return getattributegraphneighbors(ibnf)
+        else
+            return Dict(MINDF.getibnfid(ibnf) => MINDF.getibnag(ibnf))
         end
     end
 
@@ -92,24 +106,35 @@ function Makie.plot!(ibnplot::IBNPlot)
     edgeplot!(ibnplot, extralines; color=(:blue, 0.5), linewidth=10)
 
     # spectrum slots
-    ss = lift(ibnag) do ibnag 
+    ss = lift(ibnag, dictneiag) do ibnag, dictneiag
         # need to map the edges 
-        [MINDF.getfiberspectrumavailabilities(ibnag, e) for e in edges(ibnag)]
+        [let 
+            remibnag, remed = getcorrespondingibnagedge(ibnag, e, dictneiag)
+            MINDF.getfiberspectrumavailabilities(remibnag, remed) 
+        end for e in edges(ibnag)]
     end
 
-    # spectrumpolyscolors = lift(ibnag, gmp.node_pos, ibnplot.spectrumdistancefromvertex, ibnplot.spectrumverticalheight, ibnplot.spectrumdistancefromedge) do ibnag, node_pos, spectrumdistancefromvertex, spectrumverticalheight, spectrumdistancefromedge
-    #     drawspectrumboxes(ibnag, node_pos, spectrumdistancefromvertex, spectrumverticalheight, spectrumdistancefromedge)
-    # end
-    # spectrumpolys = @lift $(spectrumpolyscolors)[1]
-    # spectrumcolors = @lift $(spectrumpolyscolors)[2]
+    spectrumpolyscolors = lift(ibnag, dictneiag, gmp.node_pos, ibnplot.spectrumdistancefromvertex, ibnplot.spectrumverticalheight, ibnplot.spectrumdistancefromedge, ibnplot.showspectrumslots) do ibnag, dictneiag, node_pos, spectrumdistancefromvertex, spectrumverticalheight, spectrumdistancefromedge, showspectrumslots
+        if showspectrumslots
+            drawspectrumboxes(ibnag, dictneiag, node_pos, spectrumdistancefromvertex, spectrumverticalheight, spectrumdistancefromedge)
+        else
+            drawdummypoly(ibnag, node_pos)
+        end
+    end
+    spectrumpolys = @lift $(spectrumpolyscolors)[1]
+    spectrumcolors = @lift $(spectrumpolyscolors)[2]
 
-    # polyplots = poly!(ibnplot, spectrumpolys; color=spectrumcolors)
-    # translate!(polyplots, 0, 0, -1)
+    polyplots = poly!(ibnplot, spectrumpolys; color=spectrumcolors)
+    translate!(polyplots, 0, 0, -1)
 
     return ibnplot
 end
 
-function drawspectrumboxes(ibnag::IBNAttributeGraph, node_pos::Vector{Point2f}, spectrumdistancefromvertex::Real, spectrumverticalheight::Real, spectrumdistancefromedge::Real)
+function drawdummypoly(ibnag::IBNAttributeGraph, node_pos::Vector{Point2f})
+    return collect(first(node_pos, 3)), RGBA(1,1,1,0)
+end
+
+function drawspectrumboxes(ibnag::IBNAttributeGraph, dictneiag::Dict{UUID, <: MINDF.IBNAttributeGraph}, node_pos::Vector{Point2f}, spectrumdistancefromvertex::Real, spectrumverticalheight::Real, spectrumdistancefromedge::Real)
     polys = Vector{Vector{Point2f}}()
     colors = Vector{Colors.RGB}()
     for ed in edges(ibnag)
@@ -119,7 +144,8 @@ function drawspectrumboxes(ibnag::IBNAttributeGraph, node_pos::Vector{Point2f}, 
         unitvector = (p2 .- p1) ./ distance
         verticalunitvector = [-unitvector[2], +unitvector[1]]
 
-        spectrumavailabilities = MINDF.getfiberspectrumavailabilities(ibnag, ed)
+        remibnag, remed = getcorrespondingibnagedge(ibnag, ed, dictneiag)
+        spectrumavailabilities = MINDF.getfiberspectrumavailabilities(remibnag, remed) 
         spectrumdistancefromvertex_abs = spectrumdistancefromvertex*distance
         horizontalmult = (distance - 2spectrumdistancefromvertex_abs) / length(spectrumavailabilities)
         p1p = p1 + unitvector * spectrumdistancefromvertex_abs + verticalunitvector * spectrumdistancefromedge

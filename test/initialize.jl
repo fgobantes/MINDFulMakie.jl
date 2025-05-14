@@ -58,12 +58,6 @@ MINDF.compileintent!(ibnfs[1], intentuuid_bordernode, MINDF.KShorestPathFirstFit
 # install
 MINDF.installintent!(ibnfs[1], intentuuid_bordernode; verbose=true)
 
-# uninstall
-MINDF.uninstallintent!(ibnfs[1], intentuuid_bordernode; verbose=true)
-
-# uncompile
-MINDF.uncompileintent!(ibnfs[1], intentuuid_bordernode; verbose=true)
-
 # to neighboring domain
 conintent_neigh = MINDF.ConnectivityIntent(MINDF.GlobalNode(UUID(1), 4), MINDF.GlobalNode(UUID(3), 47), u"100.0Gbps")
 intentuuid_neigh = MINDF.addintent!(ibnfs[1], conintent_neigh, MINDF.NetworkOperator())
@@ -72,9 +66,5 @@ MINDF.compileintent!(ibnfs[1], intentuuid_neigh, MINDF.KShorestPathFirstFitCompi
 
 MINDF.installintent!(ibnfs[1], intentuuid_neigh; verbose=true)
 
-MINDF.uninstallintent!(ibnfs[1], intentuuid_neigh; verbose=true)
-
-MINDF.uncompileintent!(ibnfs[1], intentuuid_neigh; verbose=true)
- 
 
 nothing

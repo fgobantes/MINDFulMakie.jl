@@ -70,7 +70,7 @@ function Makie.plot!(intplot::IntentPlot)
     catch e
         if e isa MathOptInterface.ResultIndexBoundsError{MathOptInterface.ObjectiveValue}
             # without special layout
-            GraphMakie.graphplot!(intplot, mdidag; nlabels=labsob)
+            GraphMakie.graphplot!(intplot, mdidag_obs; nlabels=labsob)
         else 
             rethrow(e)
         end

@@ -5,8 +5,8 @@ The following options:
    - `shownodelabels = nothing` 
 Possible values are `[:nothing, :local, :global]`
    - `multidomain = true`
-   - `intentuuid = nothing`
-Plot the path for the connectivity intent
+   - `intentuuids = UUID[]`
+Plot the path for the connectivity intents provided as vector
    - `showonlyinstalledintents = false`
 Plot the spectrum slots with following properties
    - `showspectrumslots = false`,
@@ -18,7 +18,7 @@ Plot the spectrum slots with following properties
     Theme(
         multidomain = false,
         shownodelabels = nothing,
-        intentuuid = nothing,
+        intentuuids = UUID[],
         showonlyinstalledintents = false,
         showspectrumslots = false,
         spectrumdistancefromedge = 0.0,
@@ -77,33 +77,85 @@ function Makie.plot!(ibnplot::IBNPlot)
 
     gmp = ibnplot.plots[1].plots[1]
 
-    extralines = lift(ibnf, ibnplot.intentuuid, ibnplot.showonlyinstalledintents, ibnag, gmp.node_pos) do ibnf, intentuuid, showonlyinstalledintents, ibnag, node_pos
-        extralines = if !isnothing(intentuuid)
-            localnodepath = MINDF.logicalordergetpath(MINDF.getlogicallliorder(ibnf, intentuuid; onlyinstalled=showonlyinstalledintents))
+    extralines_color_width_scatter_color_size = lift(ibnf, ibnplot.intentuuids, ibnplot.showonlyinstalledintents, ibnag, gmp.node_pos, nodecolors) do ibnf, intentuuids, showonlyinstalledintents, ibnag, node_pos, nodecolors
+        manyextralines = Vector{Vector{GM.Line{Point2f}}}()
+        manyextrascattercoordinates = Vector{Vector{Point2f}}()
+        
+        for intentuuid in intentuuids
+            extrascatternodes = Set{Int}()
+            lollis = MINDF.getlogicallliorder(ibnf, intentuuid; onlyinstalled=showonlyinstalledintents)
+            localnodepath = MINDF.logicalordergetpath(lollis)
             globalnodepath = map(ln -> MINDF.getglobalnode(MINDF.getibnag(ibnf), ln), localnodepath)
             ibnaglocalnodepath = map(gn -> MINDF.getnodeindex(ibnag, gn), globalnodepath)
-            pathtolines(ibnaglocalnodepath, node_pos)
-        else
-            ibnaglocalnodepath = MINDF.LocalNode[]
-            pathtolines(ibnaglocalnodepath, node_pos)
-        end
-        # get globalnodepath from all the RemoteIntent nodes that are also initiators
-        if !isnothing(intentuuid)
+            push!(extrascatternodes,  MINDF.logicalordergetelectricalpresence(lollis)...)
+            extralines = pathtolines(ibnaglocalnodepath, node_pos)
+
+            # get globalnodepath from all the RemoteIntent nodes that are also initiators
             remoteintents = filter(MINDF.getintent.(MINDF.getidagnodedescendants(MINDF.getidag(ibnf), intentuuid))) do intentdescendant
                 intentdescendant isa MINDF.RemoteIntent && MINDF.getisinitiator(intentdescendant)
             end
+
             for remoteintent in remoteintents
                 remoteibnfid = MINDF.getibnfid(remoteintent)
                 remoteintentuuid = MINDF.getidagnodeid(remoteintent)
-                globalnodepath = MINDF.requestintentglobalpath_init(ibnf, MINDF.getibnfhandler(ibnf, remoteibnfid), remoteintentuuid; onlyinstalled=false)
+                globalnodepath = MINDF.requestintentglobalpath_init(ibnf, MINDF.getibnfhandler(ibnf, remoteibnfid), remoteintentuuid; onlyinstalled=showonlyinstalledintents)
                 ibnaglocalnodepath = map(gn -> MINDF.getnodeindex(ibnag, gn), globalnodepath)
                 push!(extralines, pathtolines(ibnaglocalnodepath, node_pos)...)
+                globalnodeelectricalpresence = MINDF.requestglobalnodeelectricalpresence_init(ibnf, MINDF.getibnfhandler(ibnf, remoteibnfid), remoteintentuuid, onlyinstalled=showonlyinstalledintents)
+                localnodeelectricalpresence = map(gn -> MINDF.getnodeindex(ibnag, gn), globalnodeelectricalpresence)
+                push!(extrascatternodes, localnodeelectricalpresence...)
             end
+            scattercoordinates = [node_pos[esn] for esn in extrascatternodes]
+            push!(manyextralines, extralines)
+            push!(manyextrascattercoordinates, scattercoordinates)
         end
-        extralines
+
+        if isempty(manyextralines)
+            ibnaglocalnodepath = MINDF.LocalNode[]
+            push!(manyextralines, pathtolines(ibnaglocalnodepath, node_pos))
+        end
+        if isempty(manyextrascattercoordinates)
+            push!(manyextrascattercoordinates, Point2f[])
+        end
+
+        @assert length(manyextralines) == length(manyextrascattercoordinates)
+        seedcolors = vcat(unique(nodecolors), Colors.@colorant_str("white"))
+        colorsextra = Colors.distinguishable_colors(length(manyextralines), seedcolors; dropseed=true)
+        manyextralineslengths = length.(manyextralines)
+        extralinescolors = let
+            manyextralineslengths = length.(manyextralines)
+            reduce(vcat, [fill(c, len) for (c,len) in zip(colorsextra, manyextralineslengths)])
+        end
+        extralineswidth = let
+            manyextralineswidth = countfrom(10, 10)
+            reduce(vcat, [fill(c, len) for (c,len) in zip(manyextralineswidth, manyextralineslengths)])
+        end
+
+        manyextrascatterlengths = length.(manyextrascattercoordinates)
+        extrascattercolors = let
+            reduce(vcat, [fill(c, len) for (c,len) in zip(colorsextra, manyextrascatterlengths)])
+        end
+        extrascattersize = let
+            manyextralineswidth = countfrom(25, 10)
+            reduce(vcat, [fill(c, len) for (c,len) in zip(manyextralineswidth, manyextrascatterlengths)])
+        end
+        extralines = reduce(vcat, manyextralines)
+        extrascatter = reduce(vcat, manyextrascattercoordinates)
+
+        return extralines, extralinescolors, extralineswidth, extrascatter, extrascattercolors, extrascattersize
     end
 
-    edgeplot!(ibnplot, extralines; color=(:blue, 0.5), linewidth=10)
+    extralines = @lift $(extralines_color_width_scatter_color_size)[1]
+    extralinescolors = @lift alphacolor.($(extralines_color_width_scatter_color_size)[2], 0.5)
+    extralineswidth = @lift $(extralines_color_width_scatter_color_size)[3]
+    extrascatter = @lift $(extralines_color_width_scatter_color_size)[4]
+    extrascattercolors = @lift alphacolor.($(extralines_color_width_scatter_color_size)[5], 0.5)
+    extrascattersize = @lift $(extralines_color_width_scatter_color_size)[6]
+
+    myedgeplot = edgeplot!(ibnplot, extralines; color=extralinescolors, linewidth=extralineswidth)
+    translate!(myedgeplot, 0, 0, -2)
+    myscatterplot = scatter!(ibnplot, extrascatter; marker = :xcross, color=extrascattercolors, markersize=extrascattersize)
+    translate!(myscatterplot, 0, 0, -1)
 
     # spectrum slots
     ss = lift(ibnag, dictneiag) do ibnag, dictneiag
@@ -125,7 +177,7 @@ function Makie.plot!(ibnplot::IBNPlot)
     spectrumcolors = @lift $(spectrumpolyscolors)[2]
 
     polyplots = poly!(ibnplot, spectrumpolys; color=spectrumcolors)
-    translate!(polyplots, 0, 0, -1)
+    translate!(polyplots, 0, 0, -3)
 
     return ibnplot
 end

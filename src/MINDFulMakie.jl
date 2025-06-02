@@ -12,9 +12,13 @@ import AbstractTrees
 
 # TODO: delete
 import MetaGraphsNext as MGN
+import GraphMakie as GM
+
+import Colors: alphacolor
+import Base.Iterators: countfrom
 
 import AttributeGraphs as AG
-import MINDFul: IBNAttributeGraph, getlatitude, getlongitude, IntentDAG, getibnfid, getidag, requestidag_init, getintent, RemoteIntent, getidagnodeid, getidagnodes, getidagnode
+import MINDFul: AbstractIBNFHandler, IBNFramework, IBNAttributeGraph, getlatitude, getlongitude, IntentDAG, getibnfid, getidag, requestidag_init, getintent, RemoteIntent, getidagnodeid, getidagnodes, getidagnode
 
 export ibnplot, ibnplot!, intentplot, intentplot!, ibngraphplot, ibngraphplot!
 

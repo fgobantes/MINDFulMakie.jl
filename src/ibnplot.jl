@@ -157,14 +157,14 @@ function Makie.plot!(ibnplot::IBNPlot)
     myscatterplot = scatter!(ibnplot, extrascatter; marker = :xcross, color=extrascattercolors, markersize=extrascattersize)
     translate!(myscatterplot, 0, 0, -1)
 
-    # spectrum slots
-    ss = lift(ibnag, dictneiag) do ibnag, dictneiag
-        # need to map the edges 
-        [let 
-            remibnag, remed = getcorrespondingibnagedge(ibnag, e, dictneiag)
-            MINDF.getfiberspectrumavailabilities(remibnag, remed) 
-        end for e in edges(ibnag)]
+    # edge status
+    linkfailedscatter_markes_rotation = lift(ibnag, dictneiag, gmp.node_pos) do ibnag, dictneiag, node_pos
+        drawbrokenlinkstatus(ibnag, dictneiag, node_pos)
     end
+    linkfailedscatter = @lift $(linkfailedscatter_markes_rotation)[1]
+    linkfailedmarkers = @lift $(linkfailedscatter_markes_rotation)[2]
+    linkfailedroration = @lift $(linkfailedscatter_markes_rotation)[3]
+    scatter!(ibnplot, linkfailedscatter; marker=linkfailedmarkers, rotation = linkfailedroration ,color=:red, markersize=15)
 
     spectrumpolyscolors = lift(ibnag, dictneiag, gmp.node_pos, ibnplot.spectrumdistancefromvertex, ibnplot.spectrumverticalheight, ibnplot.spectrumdistancefromedge, ibnplot.showspectrumslots) do ibnag, dictneiag, node_pos, spectrumdistancefromvertex, spectrumverticalheight, spectrumdistancefromedge, showspectrumslots
         if showspectrumslots
@@ -184,6 +184,34 @@ end
 
 function drawdummypoly(ibnag::IBNAttributeGraph, node_pos::Vector{Point2f})
     return collect(first(node_pos, 3)), RGBA(1,1,1,0)
+end
+
+function drawbrokenlinkstatus(ibnag::IBNAttributeGraph, dictneiag::Dict{UUID, <: MINDF.IBNAttributeGraph}, node_pos::Vector{Point2f})
+    scatterbrokencoords = Vector{Point2f}()
+    markers = Vector{Char}()
+    rotations = Vector{Float64}()
+    for ed in edges(ibnag)
+        p1 = node_pos[src(ed)]
+        p2 = node_pos[dst(ed)]
+        distance = euklideandistance(p1, p2)
+        unitvector = (p2 .- p1) ./ distance
+        verticalunitvector = [-unitvector[2], +unitvector[1]]
+
+        remibnag, remed = getcorrespondingibnagedge(ibnag, ed, dictneiag)
+        spectrumavailabilities = MINDF.getfiberspectrumavailabilities(remibnag, remed) 
+        linkstate = MINDF.getcurrentlinkstate(remibnag, remed; checkfirst=false) 
+
+        if !linkstate
+            push!(scatterbrokencoords, p1 + unitvector * distance/2 )
+            push!(rotations, angle(Complex((p1 .- p2)...)))
+            if src(ed) > dst(ed)
+                push!(markers, '/')
+            else
+                push!(markers, '\\')
+            end
+        end
+    end
+    return scatterbrokencoords, markers, rotations
 end
 
 function drawspectrumboxes(ibnag::IBNAttributeGraph, dictneiag::Dict{UUID, <: MINDF.IBNAttributeGraph}, node_pos::Vector{Point2f}, spectrumdistancefromvertex::Real, spectrumverticalheight::Real, spectrumdistancefromedge::Real)

@@ -5,7 +5,7 @@ The following options:
    - `shownodelabels = nothing` 
 Possible values are `[:nothing, :local, :global]`
    - `multidomain = true`
-   - `intentuuids = UUID[]`
+   - `intentids = UUID[]`
 Plot the path for the connectivity intents provided as vector
    - `showonlyinstalledintents = false`
 Plot the spectrum slots with following properties
@@ -18,7 +18,7 @@ Plot the spectrum slots with following properties
     Theme(
         multidomain = false,
         shownodelabels = nothing,
-        intentuuids = UUID[],
+        intentids = UUID[],
         showonlyinstalledintents = false,
         showspectrumslots = false,
         spectrumdistancefromedge = 0.0,
@@ -77,11 +77,11 @@ function Makie.plot!(ibnplot::IBNPlot)
 
     gmp = ibnplot.plots[1].plots[1]
 
-    extralines_color_width_scatter_color_size = lift(ibnf, ibnplot.intentuuids, ibnplot.showonlyinstalledintents, ibnag, gmp.node_pos, nodecolors) do ibnf, intentuuids, showonlyinstalledintents, ibnag, node_pos, nodecolors
+    extralines_color_width_scatter_color_size = lift(ibnf, ibnplot.intentids, ibnplot.showonlyinstalledintents, ibnag, gmp.node_pos, nodecolors) do ibnf, intentids, showonlyinstalledintents, ibnag, node_pos, nodecolors
         manyextralines = Vector{Vector{GM.Line{Point2f}}}()
         manyextrascattercoordinates = Vector{Vector{Point2f}}()
         
-        for intentuuid in intentuuids
+        for intentuuid in intentids
             extrascatternodes = Set{Int}()
             lollis = MINDF.getlogicallliorder(ibnf, intentuuid; onlyinstalled=showonlyinstalledintents)
             localnodepath = MINDF.logicalordergetpath(lollis)
@@ -103,7 +103,7 @@ function Makie.plot!(ibnplot::IBNPlot)
                 push!(extralines, pathtolines(ibnaglocalnodepath, node_pos)...)
                 globalnodeelectricalpresence = MINDF.requestglobalnodeelectricalpresence_init(ibnf, MINDF.getibnfhandler(ibnf, remoteibnfid), remoteintentuuid, onlyinstalled=showonlyinstalledintents)
                 localnodeelectricalpresence = map(gn -> MINDF.getnodeindex(ibnag, gn), globalnodeelectricalpresence)
-                push!(extrascatternodes, localnodeelectricalpresence...)
+                !any(isnothing, localnodeelectricalpresence) && push!(extrascatternodes, localnodeelectricalpresence...)
             end
             scattercoordinates = [node_pos[esn] for esn in extrascatternodes]
             push!(manyextralines, extralines)
@@ -158,13 +158,12 @@ function Makie.plot!(ibnplot::IBNPlot)
     translate!(myscatterplot, 0, 0, -1)
 
     # edge status
-    linkfailedscatter_markes_rotation = lift(ibnag, dictneiag, gmp.node_pos) do ibnag, dictneiag, node_pos
+    linkfailedscatter_rotation = lift(ibnag, dictneiag, gmp.node_pos) do ibnag, dictneiag, node_pos
         drawbrokenlinkstatus(ibnag, dictneiag, node_pos)
     end
-    linkfailedscatter = @lift $(linkfailedscatter_markes_rotation)[1]
-    linkfailedmarkers = @lift $(linkfailedscatter_markes_rotation)[2]
-    linkfailedroration = @lift $(linkfailedscatter_markes_rotation)[3]
-    scatter!(ibnplot, linkfailedscatter; marker=linkfailedmarkers, rotation = linkfailedroration ,color=:red, markersize=15)
+    linkfailedscatter = @lift $(linkfailedscatter_rotation)[1]
+    linkfailedroration = @lift $(linkfailedscatter_rotation)[2]
+    scatter!(ibnplot, linkfailedscatter; marker='/', rotation = linkfailedroration ,color=:red, markersize=15)
 
     spectrumpolyscolors = lift(ibnag, dictneiag, gmp.node_pos, ibnplot.spectrumdistancefromvertex, ibnplot.spectrumverticalheight, ibnplot.spectrumdistancefromedge, ibnplot.showspectrumslots) do ibnag, dictneiag, node_pos, spectrumdistancefromvertex, spectrumverticalheight, spectrumdistancefromedge, showspectrumslots
         if showspectrumslots
@@ -188,7 +187,7 @@ end
 
 function drawbrokenlinkstatus(ibnag::IBNAttributeGraph, dictneiag::Dict{UUID, <: MINDF.IBNAttributeGraph}, node_pos::Vector{Point2f})
     scatterbrokencoords = Vector{Point2f}()
-    markers = Vector{Char}()
+    # markers = Vector{Char}()
     rotations = Vector{Float64}()
     for ed in edges(ibnag)
         p1 = node_pos[src(ed)]
@@ -203,15 +202,15 @@ function drawbrokenlinkstatus(ibnag::IBNAttributeGraph, dictneiag::Dict{UUID, <:
 
         if !linkstate
             push!(scatterbrokencoords, p1 + unitvector * distance/2 )
-            push!(rotations, angle(Complex((p1 .- p2)...)))
+            ang = angle(Complex((p1 .- p2)...))
             if src(ed) > dst(ed)
-                push!(markers, '/')
+                push!(rotations, ang)
             else
-                push!(markers, '\\')
+                push!(rotations, ang + pi/4)
             end
         end
     end
-    return scatterbrokencoords, markers, rotations
+    return scatterbrokencoords, rotations
 end
 
 function drawspectrumboxes(ibnag::IBNAttributeGraph, dictneiag::Dict{UUID, <: MINDF.IBNAttributeGraph}, node_pos::Vector{Point2f}, spectrumdistancefromvertex::Real, spectrumverticalheight::Real, spectrumdistancefromedge::Real)
@@ -234,7 +233,7 @@ function drawspectrumboxes(ibnag::IBNAttributeGraph, dictneiag::Dict{UUID, <: MI
         for spectrumslotavailability in spectrumavailabilities
             specpoly = Point2f[p1p, p1p+incrementvertically, p1p+incrementvertically+incrementhorizontally, p1p+incrementhorizontally]
             push!(polys, specpoly)
-            push!(colors, spectrumslotavailability ? Colors.alphacolor(Colors.@colorant_str("gray"), 0.0) : Colors.alphacolor(Colors.@colorant_str("red"), 0.0))
+            push!(colors, spectrumslotavailability ? Colors.alphacolor(Colors.@colorant_str("white"), 0.0) : Colors.alphacolor(Colors.@colorant_str("gray"), 0.0))
             p1p += unitvector*horizontalmult
         end
     end

@@ -10,13 +10,13 @@ savefig(f)
 f,_,_ = MINDFM.ibnplot(ibnfs[1]; multidomain=true)
 savefig(f)
 
-f,_,_ = MINDFM.ibnplot(ibnfs[1]; multidomain=false, intentuuid=intentuuid_bordernode) 
+f,_,_ = MINDFM.ibnplot(ibnfs[1]; multidomain=false, intentids=[intentuuid_bordernode]) 
 savefig(f)
 
-f,_,_ = MINDFM.ibnplot(ibnfs[1]; multidomain=false, intentuuid=intentuuid_neigh) 
+f,_,_ = MINDFM.ibnplot(ibnfs[1]; multidomain=false, intentids=[intentuuid_neigh]) 
 savefig(f)
 
-f,_,_ = MINDFM.ibnplot(ibnfs[1]; multidomain=true, intentuuid=intentuuid_bordernode)
+f,_,_ = MINDFM.ibnplot(ibnfs[1]; multidomain=true, intentids=[intentuuid_bordernode])
 savefig(f)
 
 f,_,_ = MINDFM.ibnplot(ibnfs[1]; multidomain=false, showspectrumslots=true)
@@ -25,7 +25,7 @@ savefig(f)
 f,_,_ = MINDFM.ibnplot(ibnfs[1]; multidomain=true, showspectrumslots=true)
 savefig(f)
 
-f,_,_ = MINDFM.ibnplot(ibnfs[1]; multidomain=true, showspectrumslots=true, intentuuid=intentuuid_neigh)
+f,_,_ = MINDFM.ibnplot(ibnfs[1]; multidomain=true, showspectrumslots=true, intentids=[intentuuid_neigh])
 savefig(f)
 
 # break some links

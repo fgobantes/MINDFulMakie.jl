@@ -1,4 +1,4 @@
-include("initialize.jl")
+include("initialize_ma1069.jl")
 include("testsuite/ibngraphplot.jl")
 include("testsuite/ibnplot.jl")
 include("testsuite/intentplot.jl")

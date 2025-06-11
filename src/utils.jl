@@ -19,7 +19,7 @@ function _recursive_getmultidomainIntentDAGs!(idagsdict::Dict{UUID, IntentDAG}, 
     remoteibnfid ∈ ibnfuuidchecked && return
     push!(ibnfuuidchecked, remoteibnfid)
     idagsdict[remoteibnfid] = requestidag_init(myibnf, remoteibnf)
-    for interibnf in MINDF.getibnfhandlers(myibnf)
+    for interibnf in MINDF.requestibnfhandlers_init(myibnf, remoteibnf)
         _recursive_getmultidomainIntentDAGs!(idagsdict, ibnfuuidchecked, myibnf, interibnf)
     end
     return 
@@ -121,7 +121,7 @@ function _recursive_getattributegraphneighbors(dictneiag::Dict{UUID, MINDF.IBNAt
     ibnfid ∈ keys(dictneiag) && return
     remoteibnag = MINDF.requestibnattributegraph(myibnf, remoteibnf)
     dictneiag[ibnfid] = remoteibnag
-    for interibnf in MINDF.getibnfhandlers(remoteibnf)
+    for interibnf in MINDF.requestibnfhandlers_init(myibnf, remoteibnf)
         _recursive_getattributegraphneighbors(dictneiag, myibnf, interibnf)
     end
 end

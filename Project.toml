@@ -1,7 +1,7 @@
 name = "MINDFulMakie"
 uuid = "23b02573-35f2-499b-a490-fd32d1f018b6"
 authors = ["fchrstou <filippos.christou@ikr.uni-stuttgart.de> and contributors"]
-version = "0.3.0"
+version = "0.4.0"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -26,7 +26,7 @@ DocStringExtensions = "0.9.3"
 GraphMakie = "0.5.5"
 Graphs = "1.8"
 LayeredLayouts = "0.2.9"
-MINDFul = "0.3.0"
+MINDFul = "0.4.0"
 Makie = "0.22"
 MathOptInterface = "1.38.1"
 MetaGraphsNext = "0.7"

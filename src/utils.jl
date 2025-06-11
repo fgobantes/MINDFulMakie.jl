@@ -72,7 +72,7 @@ function createmultidomainIBNAttributeGraph(ibnf::MINDF.IBNFramework)
     return mdag
 end
 
-function _recursive_createmultidomainIBNAttributeGraph!(mdag::MINDF.IBNAttributeGraph, ibnfuuids::Vector{UUID}, myibnf, remoteibnf)
+function _recursive_createmultidomainIBNAttributeGraph!(mdag::MINDF.IBNAttributeGraph, ibnfuuids::Vector{UUID}, myibnf::IBNFramework, remoteibnf::AbstractIBNFHandler)
     ibnfid = MINDF.getibnfid(remoteibnf)
     ibnfid ∈ ibnfuuids && return
     remoteibnag = MINDF.requestibnattributegraph(myibnf, remoteibnf)
@@ -101,7 +101,7 @@ function _recursive_createmultidomainIBNAttributeGraph!(mdag::MINDF.IBNAttribute
 
     push!(ibnfuuids, ibnfid)
 
-    for interibnf in MINDF.getibnfhandlers(remoteibnf)
+    for interibnf in MINDF.requestibnfhandlers_init(myibnf, remoteibnf)
         _recursive_createmultidomainIBNAttributeGraph!(mdag, ibnfuuids, myibnf, interibnf)
     end
 end

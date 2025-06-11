@@ -27,20 +27,25 @@ function Makie.plot!(intplot::IntentPlot)
         idagsdict = multidomain ? getmultidomainIntentDAGs(ibnf) : Dict(getibnfid(ibnf) => getidag(ibnf))
         remoteintents, remoteintents_precon = getmultidomainremoteintents(idagsdict, getibnfid(ibnf), intentid, subidag)
         mdidag, mdidagmap = buildmdidagandmap(idagsdict, getibnfid(ibnf), intentid, remoteintents, remoteintents_precon, subidag)
+        # @info "md_obs entered", mdidagmap
         return idagsdict, mdidag, mdidagmap
     end
     idagsdict_obs = @lift $(md_obs)[1]
     mdidag_obs = @lift $(md_obs)[2]
     mdidagmap_obs = @lift $(md_obs)[3]
 
-    edgecolors = lift(idagsdict_obs, mdidag_obs, mdidagmap_obs) do idagdict, mdidag, mdidagmap
+    edgecolors = lift(md_obs) do allmd
+        mdidag = allmd[2]
+        mdidagmap = allmd[3]
         [let
             mdidagmap[src(e)][1] == mdidagmap[dst(e)][1] ? :black : :red
          end 
          for e in edges(mdidag)]
     end
 
-    labsob = lift(intplot.ibnf, intplot.showintent, intplot.showstate, idagsdict_obs, mdidagmap_obs) do ibnf, showintent, showstate, idagsdict, mdidagmap
+    labsob = lift(intplot.ibnf, intplot.showintent, intplot.showstate, md_obs) do ibnf, showintent, showstate, allmd
+        idagsdict = allmd[1]
+        mdidagmap = allmd[3]
         labs = String[]
 
         for (ibnfid, intentid) in mdidagmap
@@ -63,27 +68,31 @@ function Makie.plot!(intplot::IntentPlot)
         labs
     end
 
-
-    try 
-        subgraphlayoutob = @lift daglayout($(mdidag_obs))
-        GraphMakie.graphplot!(intplot, mdidag_obs; layout=subgraphlayoutob, nlabels=labsob, edge_color=edgecolors)
-    catch e
-        if e isa MathOptInterface.ResultIndexBoundsError{MathOptInterface.ObjectiveValue}
-            # without special layout
-            GraphMakie.graphplot!(intplot, mdidag; nlabels=labsob)
-        else 
-            rethrow(e)
-        end
-    end
+    # try 
+    GraphMakie.graphplot!(intplot, mdidag_obs; layout=daglayout, nlabels=labsob, edge_color=edgecolors)
+    # catch e
+    #     if e isa MathOptInterface.ResultIndexBoundsError{MathOptInterface.ObjectiveValue}
+    #         # without special layout
+    #         GraphMakie.graphplot!(intplot, mdidag_obs; nlabels=labsob)
+    #     else 
+    #         rethrow(e)
+    #     end
+    # end
 
     return intplot
 end
 
 
 function daglayout(dag::AbstractGraph; angle=-π/2)
-    xs, ys, paths = solve_positions(Zarate(), dag)
-    rotatecoords!(xs, ys, paths, -π/2)
-    (args...) -> Point2.(zip(xs,ys))
+    if nv(dag) == 0 || ne(dag) == 1
+        # return (args...) -> Spring()(dag)
+        return Spring()(dag)
+    else
+        xs, ys, paths = solve_positions(Zarate(), dag)
+        rotatecoords!(xs, ys, paths, -π/2)
+        # return (args...) -> Point2.(zip(xs,ys))
+        return Point2.(zip(xs,ys))
+    end
 end
 
 """

@@ -19,6 +19,9 @@ NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
+[sources.MINDFul]
+url = "https://github.com/UniStuttgart-IKR/MINDFul.jl"
+
 [compat]
 AbstractTrees = "0.4.4"
 Colors = "0.13"
@@ -27,16 +30,13 @@ GraphMakie = "0.5.5"
 Graphs = "1.8"
 LayeredLayouts = "0.2.9"
 MINDFul = "0.4.0"
-Makie = "0.22"
+Makie = "0.22, 0.23"
 MathOptInterface = "1.38.1"
 MetaGraphsNext = "0.7"
 NetworkLayout = "0.4.5"
 Printf = "1.11.0"
 julia = "1"
 
-[sources]
-MINDFul = {url = "https://github.com/UniStuttgart-IKR/MINDFul.jl"}
- 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
